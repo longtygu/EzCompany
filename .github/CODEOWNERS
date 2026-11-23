@@ -1,0 +1,6 @@
+# Security-critical core subsystems require maintainer review
+/src/EzCompany.Core.Crypto/      @ezcompany-security-maintainers
+/src/EzCompany.Core.LanAgent/    @ezcompany-security-maintainers
+/src/EzCompany.Core.Updater/     @ezcompany-security-maintainers
+/src/EzCompany.Core.Telemetry/   @ezcompany-security-maintainers
+/.github/workflows/              @ezcompany-security-maintainers

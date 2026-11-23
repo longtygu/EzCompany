@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EzCompany.Tests</RootNamespace>
+    <AssemblyName>EzCompany.Tests</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EzCompany.Core.Abstractions\EzCompany.Core.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\EzCompany.Core.Crypto\EzCompany.Core.Crypto.csproj" />
+    <ProjectReference Include="..\..\src\EzCompany.Core.Data\EzCompany.Core.Data.csproj" />
+    <ProjectReference Include="..\..\src\EzCompany.Core.LanAgent\EzCompany.Core.LanAgent.csproj" />
+    <ProjectReference Include="..\..\src\EzCompany.Core.Telemetry\EzCompany.Core.Telemetry.csproj" />
+    <ProjectReference Include="..\..\src\EzCompany.Core.Updater\EzCompany.Core.Updater.csproj" />
+    <ProjectReference Include="..\..\src\Modules\EzCompany.Modules.Accounting\EzCompany.Modules.Accounting.csproj" />
+    <ProjectReference Include="..\..\src\Modules\EzCompany.Modules.Legal\EzCompany.Modules.Legal.csproj" />
+    <ProjectReference Include="..\..\src\Modules\EzCompany.Modules.Office\EzCompany.Modules.Office.csproj" />
+    <ProjectReference Include="..\..\src\EzCompany.App\EzCompany.App.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

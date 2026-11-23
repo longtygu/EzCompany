@@ -1,0 +1,38 @@
+## .NET / Visual Studio / Rider
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.idea/
+TestResults/
+*.log
+BenchmarkDotNet.Artifacts/
+
+## Build / Packaging / Releases
+publish/
+Releases/
+nupkg/
+*.nupkg
+*.snupkg
+*.vsix
+
+## Sensitive Local Runtime Artifacts (Never Commit)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.recovery
+*.lic
+*.dpapi
+clock.guard
+*.key
+*.pub
+appsettings.Development.json
+appsettings.Local.json
+Profiles/
+Backups/
+Vault/
+DirectorCache/
