@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EzCompany.Core.Telemetry</RootNamespace>
+    <AssemblyName>EzCompany.Core.Telemetry</AssemblyName>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EzCompany.Core.Abstractions\EzCompany.Core.Abstractions.csproj" />
+    <ProjectReference Include="..\EzCompany.Core.Crypto\EzCompany.Core.Crypto.csproj" />
+    <ProjectReference Include="..\EzCompany.Core.Data\EzCompany.Core.Data.csproj" />
+    <ProjectReference Include="..\EzCompany.Core.LanAgent\EzCompany.Core.LanAgent.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
+  </ItemGroup>
+</Project>
