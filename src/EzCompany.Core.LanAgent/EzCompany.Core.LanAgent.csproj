@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EzCompany.Core.LanAgent</RootNamespace>
+    <AssemblyName>EzCompany.Core.LanAgent</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EzCompany.Core.Abstractions\EzCompany.Core.Abstractions.csproj" />
+    <ProjectReference Include="..\EzCompany.Core.Crypto\EzCompany.Core.Crypto.csproj" />
+    <ProjectReference Include="..\EzCompany.Core.Data\EzCompany.Core.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Makaretu.Dns.Multicast.New" Version="0.38.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+  </ItemGroup>
+</Project>
