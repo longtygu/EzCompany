@@ -28,8 +28,10 @@ jobs:
         shell: pwsh
         run: |
           $ver = "${{ github.ref_name }}".TrimStart('v')
+          $numericBase = ($ver -split '[-+]')[0]
           "APP_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Target release version: $ver"
+          "ASM_VERSION=$numericBase.0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Target release version: $ver (AssemblyVersion: $numericBase.0)"
 
       - name: Restore & Test Release
         run: |
@@ -38,10 +40,10 @@ jobs:
           dotnet test EzCompany.sln -c Release --no-build --verbosity normal
 
       - name: Publish self-contained win-x64 application
-        run: dotnet publish src/EzCompany.App/EzCompany.App.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ env.APP_VERSION }} -p:AssemblyVersion=${{ env.APP_VERSION }}.0 -p:FileVersion=${{ env.APP_VERSION }}.0 -o publish/win-x64
+        run: dotnet publish src/EzCompany.App/EzCompany.App.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ env.APP_VERSION }} -p:AssemblyVersion=${{ env.ASM_VERSION }} -p:FileVersion=${{ env.ASM_VERSION }} -o publish/win-x64
 
-      - name: Install Velopack CLI (vpk)
-        run: dotnet tool install -g vpk
+      - name: Install Velopack CLI (vpk 1.2.161)
+        run: dotnet tool install -g vpk --version 1.2.161
 
       - name: Download previous release assets for Delta Patch generation (best-effort)
         shell: pwsh
@@ -61,7 +63,7 @@ jobs:
       - name: Pack Velopack installer, delta patch, portable zip & releases.win.json
         shell: pwsh
         run: |
-          vpk pack --packId EzCompany --packVersion ${{ env.APP_VERSION }} --packDir publish/win-x64 --mainExe EzCompany.App.exe --outputDir Releases --packTitle "Ez Company" --channel win
+          vpk pack --packId EzCompany --packVersion ${{ env.APP_VERSION }} --packDir publish/win-x64 --mainExe EzCompany.App.exe --outputDir Releases --packTitle "Ez Company" --runtime win-x64 --channel win
           if (-not (Get-ChildItem -Path Releases -Filter "*Portable*.zip")) {
             Compress-Archive -Path "publish/win-x64/*" -DestinationPath "Releases/EzCompany-$($env:APP_VERSION)-win-Portable.zip" -Force
           }
@@ -76,6 +78,16 @@ jobs:
           }
           $lines | Out-File -FilePath Releases/SHA256SUMS.txt -Encoding utf8
 
+      - name: Resolve release notes body file
+        shell: pwsh
+        run: |
+          $notesFile = "docs/RELEASE_v${{ env.APP_VERSION }}.md"
+          if (-not (Test-Path $notesFile)) {
+            $notesFile = "CHANGELOG.md"
+          }
+          "RELEASE_BODY_PATH=$notesFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using release notes body: $notesFile"
+
       - name: Attest SLSA Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
@@ -84,5 +96,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: ${{ env.RELEASE_BODY_PATH }}
           generate_release_notes: true
           files: Releases/*

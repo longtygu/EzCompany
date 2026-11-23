@@ -35,11 +35,19 @@
 
 ---
 
-## Yêu cầu môi trường & Lệnh Build / Test
+## Yêu cầu môi trường, Đóng gói Setup & Lệnh Build / Test
 
 - Windows 10/11 (x64)
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (hoặc .NET SDK >= 8.0 kèm Windows Desktop Pack)
 
+### Tải bản cài đặt hoặc tự đóng gói `Setup.exe` cục bộ
+- Tải trực tiếp bản phát hành chính thức tại [GitHub Releases](https://github.com/longtygu/EzCompany/releases) (mô tả chi tiết xem tại [docs/RELEASE_v0.1.0.md](docs/RELEASE_v0.1.0.md)).
+- Hoặc tự tạo bộ cài đặt Velopack (`Setup.exe`, Portable `.zip`, `.nupkg`, `releases.win.json`, `SHA256SUMS.txt`) tại máy Windows của bạn:
+```powershell
+.\scripts\build-setup.ps1 -Version 0.1.0
+```
+
+### Build & Chạy kiểm thử từ mã nguồn
 ```powershell
 dotnet restore EzCompany.sln
 dotnet build EzCompany.sln -c Release
