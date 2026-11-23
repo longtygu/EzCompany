@@ -1,0 +1,33 @@
+<UserControl x:Class="EzCompany.App.Views.UpdatesSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="780">
+            <TextBlock Text="Cập nhật An toàn (Velopack) &amp; Sao lưu Di trú CSDL" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="{Binding RepoUrlText}" Opacity="0.75" Margin="0,4,0,18" />
+
+            <Border Padding="16" Margin="0,0,0,16" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <StackPanel>
+                    <TextBlock Text="{Binding VersionText}" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding PolicyGateText}" Margin="0,6,0,10" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding UpdateStatus}" Margin="0,0,0,14" FontWeight="SemiBold" TextWrapping="Wrap" />
+
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button Appearance="Primary" Content="Kiểm tra cập nhật" Command="{Binding CheckForUpdateCommand}" Margin="0,0,10,0" />
+                        <ui:Button Content="Tải &amp; Cài đặt bản cập nhật"
+                                   Command="{Binding InstallUpdateCommand}"
+                                   IsEnabled="{Binding CanInstallUpdate}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Padding="16" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <StackPanel>
+                    <TextBlock Text="Lịch sử Sao lưu trước Migration (PreMigration Backups + SHA-256)" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <ListBox ItemsSource="{Binding PreMigrationBackups}" Height="160" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

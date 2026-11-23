@@ -1,0 +1,19 @@
+<Application x:Class="EzCompany.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:conv="clr-namespace:EzCompany.App.Converters"
+             ShutdownMode="OnLastWindowClose">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Dark" />
+                <ui:ControlsDictionary />
+            </ResourceDictionary.MergedDictionaries>
+            <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+            <conv:InverseBoolToVisibilityConverter x:Key="InvBoolToVis" />
+            <conv:InverseBoolConverter x:Key="InvBool" />
+            <conv:NullOrEmptyToCollapsedConverter x:Key="NotEmptyToVis" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
