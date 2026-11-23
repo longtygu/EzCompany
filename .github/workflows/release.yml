@@ -1,0 +1,88 @@
+name: Release (Velopack + SLSA Provenance)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release-windows:
+    name: Build, Pack Velopack, Sign Checksums & Attest SLSA
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract SemVer tag version
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          "APP_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Target release version: $ver"
+
+      - name: Restore & Test Release
+        run: |
+          dotnet restore EzCompany.sln
+          dotnet build EzCompany.sln -c Release --no-restore
+          dotnet test EzCompany.sln -c Release --no-build --verbosity normal
+
+      - name: Publish self-contained win-x64 application
+        run: dotnet publish src/EzCompany.App/EzCompany.App.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ env.APP_VERSION }} -p:AssemblyVersion=${{ env.APP_VERSION }}.0 -p:FileVersion=${{ env.APP_VERSION }}.0 -o publish/win-x64
+
+      - name: Install Velopack CLI (vpk)
+        run: dotnet tool install -g vpk
+
+      - name: Download previous release assets for Delta Patch generation (best-effort)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          New-Item -ItemType Directory -Force -Path Releases | Out-Null
+          try {
+            $latestTag = gh release list --limit 1 --json tagName --jq '.[0].tagName'
+            if ($latestTag) {
+              gh release download $latestTag --dir Releases --pattern "*.nupkg" --pattern "releases.win.json"
+            }
+          } catch {
+            Write-Host "No previous release found; creating initial full release."
+          }
+
+      - name: Pack Velopack installer, delta patch, portable zip & releases.win.json
+        shell: pwsh
+        run: |
+          vpk pack --packId EzCompany --packVersion ${{ env.APP_VERSION }} --packDir publish/win-x64 --mainExe EzCompany.App.exe --outputDir Releases --packTitle "Ez Company" --channel win
+          if (-not (Get-ChildItem -Path Releases -Filter "*Portable*.zip")) {
+            Compress-Archive -Path "publish/win-x64/*" -DestinationPath "Releases/EzCompany-$($env:APP_VERSION)-win-Portable.zip" -Force
+          }
+
+      - name: Generate SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          Remove-Item -Path Releases/SHA256SUMS.txt -ErrorAction SilentlyContinue
+          $lines = Get-ChildItem -Path Releases -File | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          $lines | Out-File -FilePath Releases/SHA256SUMS.txt -Encoding utf8
+
+      - name: Attest SLSA Build Provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'Releases/*'
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: Releases/*

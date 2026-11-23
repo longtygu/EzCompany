@@ -1,0 +1,33 @@
+name: CI Build & Test (PR Sandbox)
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & xUnit Test (Windows .NET 8)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore NuGet dependencies
+        run: dotnet restore EzCompany.sln
+
+      - name: Build solution (Release)
+        run: dotnet build EzCompany.sln -c Release --no-restore
+
+      - name: Run xUnit tests (Release)
+        run: dotnet test EzCompany.sln -c Release --no-build --verbosity normal
