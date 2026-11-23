@@ -32,7 +32,8 @@ clock.guard
 *.pub
 appsettings.Development.json
 appsettings.Local.json
-Profiles/
-Backups/
-Vault/
-DirectorCache/
+/Profiles/
+/Backups/
+/Vault/
+/DirectorCache/
+/.tools/
