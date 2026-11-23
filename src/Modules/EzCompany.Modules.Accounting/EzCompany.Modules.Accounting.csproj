@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EzCompany.Modules.Accounting</RootNamespace>
+    <AssemblyName>EzCompany.Modules.Accounting</AssemblyName>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\EzCompany.Core.Abstractions\EzCompany.Core.Abstractions.csproj" />
+    <ProjectReference Include="..\..\EzCompany.Core.Data\EzCompany.Core.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+</Project>

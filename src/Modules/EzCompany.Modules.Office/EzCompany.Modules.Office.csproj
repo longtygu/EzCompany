@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EzCompany.Modules.Office</RootNamespace>
+    <AssemblyName>EzCompany.Modules.Office</AssemblyName>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\EzCompany.Core.Abstractions\EzCompany.Core.Abstractions.csproj" />
+    <ProjectReference Include="..\..\EzCompany.Core.Data\EzCompany.Core.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+</Project>
