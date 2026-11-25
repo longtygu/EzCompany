@@ -21,11 +21,12 @@
             <sys:Double x:Key="AppFontSizeSmall">12</sys:Double>
             <sys:Double x:Key="AppFontSizeHeading">18</sys:Double>
             <sys:Double x:Key="AppFontSizeTitle">22</sys:Double>
-            <sys:Double x:Key="AppCardMaxWidth">1080</sys:Double>
+            <sys:Double x:Key="AppCardMaxWidth">960</sys:Double>
             <CornerRadius x:Key="AppCardCornerRadius">10</CornerRadius>
             <Thickness x:Key="AppCardPadding">16</Thickness>
             <GridLength x:Key="AppSidebarWidth">260</GridLength>
             <SolidColorBrush x:Key="AppAccentBrush" Color="#0078D4" />
+            <SolidColorBrush x:Key="AppCardBackgroundBrush" Color="#252830" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

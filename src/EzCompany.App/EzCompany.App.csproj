@@ -5,6 +5,7 @@
     <AssemblyName>EzCompany.App</AssemblyName>
     <UseWPF>true</UseWPF>
     <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <ApplicationIcon>Assets\EzCompany.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,10 +25,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageReference Include="Velopack" Version="1.2.161" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\EzCompany.png" />
+    <Resource Include="Assets\EzCompany.ico" />
   </ItemGroup>
 
   <ItemGroup>

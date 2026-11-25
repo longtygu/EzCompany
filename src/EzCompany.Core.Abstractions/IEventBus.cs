@@ -58,3 +58,27 @@ public sealed record PasswordResetRequestedEvent(
     string FullName,
     string Reason,
     DateTimeOffset RequestedAtUtc);
+
+public sealed record CompanyLogoUpdatedEvent(
+    Guid CompanyId,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record ChatMessageReceivedEvent(
+    Guid ConversationId,
+    Guid MessageId,
+    string SenderFullName,
+    string Preview,
+    DateTimeOffset SentAtUtc);
+
+public sealed record TimelinePlanUpdatedEvent(
+    Guid PlanId,
+    string Title,
+    string ActorFullName,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record TaskAssignedNotificationEvent(
+    Guid TaskId,
+    string Title,
+    string AssignerFullName,
+    string Priority,
+    DateTimeOffset? DueDateUtc);

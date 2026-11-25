@@ -10,6 +10,8 @@ public sealed class CompanyProfileEntity
     public bool IsDirectorNode { get; set; }
     public bool IsGenesisCompleted { get; set; }
     public int AppSchemaVersion { get; set; } = 1;
+    public string? CompanyLogoBase64 { get; set; }
+    public DateTimeOffset? CompanyLogoUpdatedAtUtc { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }
@@ -150,6 +152,10 @@ public sealed class WorkTaskEntity
     public DateTimeOffset UpdatedAtUtc { get; set; }
     public DateTimeOffset? CompletedAtUtc { get; set; }
 
+    public string? AssignmentFileName { get; set; }
+    public string? AssignmentVaultPath { get; set; }
+    public string? AssignmentFileSha256 { get; set; }
+
     public string HandoverNotes { get; set; } = string.Empty;
     public string? HandoverFileName { get; set; }
     public string? HandoverVaultPath { get; set; }
@@ -192,4 +198,92 @@ public sealed class PasswordResetRequestEntity
     public string? DecisionMessage { get; set; }
     public string? SignedResetTicketJson { get; set; }
     public string? RemoteIpAddress { get; set; }
+}
+
+public sealed class ChatConversationEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string ConversationType { get; set; } = "Group"; // Group | Direct
+    public string Name { get; set; } = string.Empty;
+    public string MemberMachineIdsJson { get; set; } = "[]";
+    public string MemberNamesJson { get; set; } = "[]";
+    public Guid? PinnedTaskId { get; set; }
+    public string? PinnedTaskSummary { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
+public sealed class ChatMessageEntity
+{
+    public Guid Id { get; set; }
+    public Guid ConversationId { get; set; }
+    public Guid CompanyId { get; set; }
+    public string SenderMachineId { get; set; } = string.Empty;
+    public string SenderUsername { get; set; } = string.Empty;
+    public string SenderFullName { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string? AttachmentFileName { get; set; }
+    public string? AttachmentVaultPath { get; set; }
+    public string? AttachmentSha256 { get; set; }
+    public long AttachmentSizeBytes { get; set; }
+    public Guid? LinkedTaskId { get; set; }
+    public DateTimeOffset SentAtUtc { get; set; }
+    public string? PendingSyncTargetsJson { get; set; }
+}
+
+public sealed class TimelinePlanEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = "Plan"; // Plan | Milestone | Meeting | Deadline
+    public DateTimeOffset StartDateUtc { get; set; }
+    public DateTimeOffset EndDateUtc { get; set; }
+    public string Status { get; set; } = "Planned"; // Planned | InProgress | Done
+    public string CreatedByMachineId { get; set; } = string.Empty;
+    public string CreatedByUsername { get; set; } = string.Empty;
+    public string CreatedByFullName { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+    public bool IsDeleted { get; set; }
+}
+
+public sealed class EmployeeProfileEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string Department { get; set; } = string.Empty;
+    public string PositionTitle { get; set; } = string.Empty;
+    public string RolesCsv { get; set; } = "Staff";
+    public string? LinkedMachineId { get; set; }
+    public string? LinkedUsername { get; set; }
+    public string Phone { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string NationalId { get; set; } = string.Empty;
+    public DateTimeOffset JoinDateUtc { get; set; }
+    public string EmploymentStatus { get; set; } = "Active"; // Active | OnLeave | Inactive
+    public string Notes { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
+public sealed class AttendanceRecordEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid EmployeeProfileId { get; set; }
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string MachineId { get; set; } = string.Empty;
+    public string DateKey { get; set; } = string.Empty; // yyyy-MM-dd
+    public DateTimeOffset? CheckInUtc { get; set; }
+    public DateTimeOffset? CheckOutUtc { get; set; }
+    public double WorkedHours { get; set; }
+    public string Status { get; set; } = "Present"; // Present | Late | HalfDay | Leave | Absent
+    public string Notes { get; set; } = string.Empty;
+    public DateTimeOffset UpdatedAtUtc { get; set; }
 }

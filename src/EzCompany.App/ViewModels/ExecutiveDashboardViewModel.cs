@@ -86,9 +86,13 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     [ObservableProperty] private string _kpiRedAlertsText = "0";
     [ObservableProperty] private string _kpiAlertDetails = "Không có cảnh báo";
 
-    // Selected Workstation & Actions
+    // Selected Workstation & Actions (Multi-role support)
     [ObservableProperty] private PairedDeviceEntity? _selectedWorkstation;
-    [ObservableProperty] private string _editPolicyRole = CompanyRoles.Staff;
+    [ObservableProperty] private bool _editRoleDirector;
+    [ObservableProperty] private bool _editRoleAccounting;
+    [ObservableProperty] private bool _editRoleLegal;
+    [ObservableProperty] private bool _editRoleHr;
+    [ObservableProperty] private bool _editRoleStaff = true;
     [ObservableProperty] private bool _editAllowAccounting;
     [ObservableProperty] private bool _editAllowLegal;
     [ObservableProperty] private bool _editAllowOffice = true;
@@ -97,19 +101,23 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     [ObservableProperty] private VaultFileEntryDto? _selectedVaultFile;
     [ObservableProperty] private string? _lastBackupFilePath;
 
-    // Pairing Center
+    // Pairing Center (Multi-role support)
     [ObservableProperty] private bool _isPairingOpen;
     [ObservableProperty] private string _pairingToggleText = "Mở ghép đôi máy mới (tự đóng sau 5 phút)";
     [ObservableProperty] private string _pairingCountdownText = "Đang đóng";
     [ObservableProperty] private PendingPairingRequest? _selectedPairingRequest;
     [ObservableProperty] private PasswordResetRequestEntity? _selectedPasswordReset;
-    [ObservableProperty] private string _approveRole = CompanyRoles.Staff;
+    [ObservableProperty] private bool _approveRoleDirector;
+    [ObservableProperty] private bool _approveRoleAccounting;
+    [ObservableProperty] private bool _approveRoleLegal;
+    [ObservableProperty] private bool _approveRoleHr;
+    [ObservableProperty] private bool _approveRoleStaff = true;
     [ObservableProperty] private bool _approveAccounting;
     [ObservableProperty] private bool _approveLegal;
     [ObservableProperty] private bool _approveOffice = true;
 
     // Release Governance
-    [ObservableProperty] private string _fleetMaxApprovedVersion = "0.2.0";
+    [ObservableProperty] private string _fleetMaxApprovedVersion = "0.3.0";
     [ObservableProperty] private string _fleetAllowedChannel = "stable";
 
     // Snapshot Viewer
@@ -122,13 +130,17 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     public event EventHandler<string>? InspectDatabaseRequested;
     public event EventHandler? PasswordResetsRefreshRequested;
 
-    partial void OnApproveRoleChanged(string value)
-    {
-        IReadOnlyList<string> defaults = CompanyRoles.GetDefaultModulesForRole(value);
-        ApproveAccounting = defaults.Contains(ModuleIds.AccountingInvoiceXml);
-        ApproveLegal = defaults.Contains(ModuleIds.LegalContractDiff);
-        ApproveOffice = defaults.Contains(ModuleIds.OfficePdfStudio);
-    }
+    partial void OnApproveRoleDirectorChanged(bool value) => SyncApproveModulesFromRoles();
+    partial void OnApproveRoleAccountingChanged(bool value) => SyncApproveModulesFromRoles();
+    partial void OnApproveRoleLegalChanged(bool value) => SyncApproveModulesFromRoles();
+    partial void OnApproveRoleHrChanged(bool value) => SyncApproveModulesFromRoles();
+    partial void OnApproveRoleStaffChanged(bool value) => SyncApproveModulesFromRoles();
+
+    partial void OnEditRoleDirectorChanged(bool value) => SyncEditModulesFromRoles();
+    partial void OnEditRoleAccountingChanged(bool value) => SyncEditModulesFromRoles();
+    partial void OnEditRoleLegalChanged(bool value) => SyncEditModulesFromRoles();
+    partial void OnEditRoleHrChanged(bool value) => SyncEditModulesFromRoles();
+    partial void OnEditRoleStaffChanged(bool value) => SyncEditModulesFromRoles();
 
     partial void OnSelectedWorkstationChanged(PairedDeviceEntity? value)
     {
@@ -137,11 +149,41 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
             return;
         }
 
-        EditPolicyRole = value.Role;
-        IReadOnlyList<string> defaults = CompanyRoles.GetDefaultModulesForRole(value.Role);
+        EditRoleDirector = CompanyRoles.HasRole(value.Role, CompanyRoles.Director);
+        EditRoleAccounting = CompanyRoles.HasRole(value.Role, CompanyRoles.Accounting);
+        EditRoleLegal = CompanyRoles.HasRole(value.Role, CompanyRoles.Legal);
+        EditRoleHr = CompanyRoles.HasRole(value.Role, CompanyRoles.Hr);
+        EditRoleStaff = CompanyRoles.HasRole(value.Role, CompanyRoles.Staff);
+        SyncEditModulesFromRoles();
+    }
+
+    private void SyncApproveModulesFromRoles()
+    {
+        string roleStr = BuildRoleString(ApproveRoleDirector, ApproveRoleAccounting, ApproveRoleLegal, ApproveRoleHr, ApproveRoleStaff);
+        IReadOnlyList<string> defaults = CompanyRoles.GetDefaultModulesForRole(roleStr);
+        ApproveAccounting = defaults.Contains(ModuleIds.AccountingInvoiceXml);
+        ApproveLegal = defaults.Contains(ModuleIds.LegalContractDiff);
+        ApproveOffice = defaults.Contains(ModuleIds.OfficePdfStudio);
+    }
+
+    private void SyncEditModulesFromRoles()
+    {
+        string roleStr = BuildRoleString(EditRoleDirector, EditRoleAccounting, EditRoleLegal, EditRoleHr, EditRoleStaff);
+        IReadOnlyList<string> defaults = CompanyRoles.GetDefaultModulesForRole(roleStr);
         EditAllowAccounting = defaults.Contains(ModuleIds.AccountingInvoiceXml);
         EditAllowLegal = defaults.Contains(ModuleIds.LegalContractDiff);
         EditAllowOffice = defaults.Contains(ModuleIds.OfficePdfStudio);
+    }
+
+    private static string BuildRoleString(bool dir, bool acc, bool leg, bool hr, bool staff)
+    {
+        var list = new List<string>();
+        if (dir) list.Add(CompanyRoles.Director);
+        if (acc) list.Add(CompanyRoles.Accounting);
+        if (leg) list.Add(CompanyRoles.Legal);
+        if (hr) list.Add(CompanyRoles.Hr);
+        if (staff) list.Add(CompanyRoles.Staff);
+        return CompanyRoles.FormatRoleStorage(list);
     }
 
     public void RefreshPairingCountdown()
@@ -325,16 +367,17 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
             return;
         }
 
+        string roleCsv = BuildRoleString(ApproveRoleDirector, ApproveRoleAccounting, ApproveRoleLegal, ApproveRoleHr, ApproveRoleStaff);
         List<string> modules = BuildModuleSelection(ApproveAccounting, ApproveLegal, ApproveOffice);
         await _pairingManager.ApproveRequestAsync(
             SelectedPairingRequest.RequestId,
-            ApproveRole,
+            roleCsv,
             modules,
             FleetMaxApprovedVersion,
             FleetAllowedChannel,
             _session.FullName);
 
-        StatusBanner = $"Đã duyệt máy {SelectedPairingRequest.FullName} (SAS {SelectedPairingRequest.SasCode}).";
+        StatusBanner = $"Đã duyệt máy {SelectedPairingRequest.FullName} (Vai trò: {CompanyRoles.FormatRolesBilingual(roleCsv)}, SAS {SelectedPairingRequest.SasCode}).";
         await RefreshAllAsync();
     }
 
@@ -402,10 +445,11 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
             return;
         }
 
+        string roleCsv = BuildRoleString(EditRoleDirector, EditRoleAccounting, EditRoleLegal, EditRoleHr, EditRoleStaff);
         List<string> modules = BuildModuleSelection(EditAllowAccounting, EditAllowLegal, EditAllowOffice);
         (bool pushedImmediately, _) = await _lanClient.IssueAndDispatchPolicyAsync(
             SelectedWorkstation.MachineId,
-            EditPolicyRole,
+            roleCsv,
             modules,
             FleetAllowedChannel,
             FleetMaxApprovedVersion,

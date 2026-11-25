@@ -167,6 +167,8 @@ public static class Program
 
                 services.AddSingleton<AppearanceSettingsService>();
                 services.AddSingleton<ThemeService>();
+                services.AddSingleton<AppDiagnosticsAndRepairService>();
+                services.AddSingleton<AttendanceExcelExporter>();
                 services.AddSingleton<ReadOnlyDbInspectorService>();
                 services.AddTransient<MainWindowViewModel>();
                 services.AddTransient<MainWindow>();
@@ -176,6 +178,10 @@ public static class Program
                 services.AddTransient<WelcomeDashboardView>();
                 services.AddTransient<TaskManagementViewModel>();
                 services.AddTransient<TaskManagementView>();
+                services.AddTransient<ChatWorkspaceViewModel>();
+                services.AddTransient<ChatWorkspaceView>();
+                services.AddTransient<HrAttendanceViewModel>();
+                services.AddTransient<HrAttendanceView>();
                 services.AddTransient<AccountAndAppearanceViewModel>();
                 services.AddTransient<AccountAndAppearanceView>();
                 services.AddTransient<ExecutiveDashboardViewModel>();

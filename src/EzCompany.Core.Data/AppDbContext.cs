@@ -15,6 +15,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<WorkTaskEntity> WorkTasks => Set<WorkTaskEntity>();
     public DbSet<WorkTaskHistoryEntity> WorkTaskHistories => Set<WorkTaskHistoryEntity>();
     public DbSet<PasswordResetRequestEntity> PasswordResetRequests => Set<PasswordResetRequestEntity>();
+    public DbSet<ChatConversationEntity> ChatConversations => Set<ChatConversationEntity>();
+    public DbSet<ChatMessageEntity> ChatMessages => Set<ChatMessageEntity>();
+    public DbSet<TimelinePlanEntity> TimelinePlans => Set<TimelinePlanEntity>();
+    public DbSet<EmployeeProfileEntity> EmployeeProfiles => Set<EmployeeProfileEntity>();
+    public DbSet<AttendanceRecordEntity> AttendanceRecords => Set<AttendanceRecordEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -140,6 +145,61 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Username).HasMaxLength(128).IsRequired();
             e.Property(x => x.FullName).HasMaxLength(256).IsRequired();
             e.Property(x => x.State).HasMaxLength(32).IsRequired();
+        });
+
+        modelBuilder.Entity<ChatConversationEntity>(e =>
+        {
+            e.ToTable("ChatConversations");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.UpdatedAtUtc);
+            e.Property(x => x.ConversationType).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(256).IsRequired();
+        });
+
+        modelBuilder.Entity<ChatMessageEntity>(e =>
+        {
+            e.ToTable("ChatMessages");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ConversationId);
+            e.HasIndex(x => x.SentAtUtc);
+            e.Property(x => x.SenderMachineId).HasMaxLength(128).IsRequired();
+            e.Property(x => x.SenderUsername).HasMaxLength(128).IsRequired();
+            e.Property(x => x.SenderFullName).HasMaxLength(256).IsRequired();
+        });
+
+        modelBuilder.Entity<TimelinePlanEntity>(e =>
+        {
+            e.ToTable("TimelinePlans");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.StartDateUtc);
+            e.HasIndex(x => x.UpdatedAtUtc);
+            e.Property(x => x.Title).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+        });
+
+        modelBuilder.Entity<EmployeeProfileEntity>(e =>
+        {
+            e.ToTable("EmployeeProfiles");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.EmployeeCode).IsUnique();
+            e.HasIndex(x => x.LinkedMachineId);
+            e.Property(x => x.EmployeeCode).HasMaxLength(64).IsRequired();
+            e.Property(x => x.FullName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.RolesCsv).HasMaxLength(256).IsRequired();
+            e.Property(x => x.EmploymentStatus).HasMaxLength(32).IsRequired();
+        });
+
+        modelBuilder.Entity<AttendanceRecordEntity>(e =>
+        {
+            e.ToTable("AttendanceRecords");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.EmployeeProfileId, x.DateKey });
+            e.HasIndex(x => x.DateKey);
+            e.Property(x => x.EmployeeCode).HasMaxLength(64).IsRequired();
+            e.Property(x => x.EmployeeName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.DateKey).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
         });
     }
 }

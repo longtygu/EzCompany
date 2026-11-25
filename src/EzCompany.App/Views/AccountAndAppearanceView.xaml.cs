@@ -10,7 +10,7 @@ public partial class AccountAndAppearanceView : UserControl
     {
         DataContext = viewModel;
         InitializeComponent();
-        Loaded += (_, _) => viewModel.LoadFromCurrentState();
+        Loaded += async (_, _) => await viewModel.LoadAllAsync();
     }
 
     private AccountAndAppearanceViewModel ViewModel => (AccountAndAppearanceViewModel)DataContext;

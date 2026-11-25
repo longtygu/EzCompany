@@ -83,12 +83,18 @@
 
                         <!-- Policy + Notice -->
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Phân quyền tức thì / Pending Queue" FontWeight="SemiBold" />
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,6">
-                                <ComboBox ItemsSource="{Binding AvailableRoles}" SelectedItem="{Binding EditPolicyRole}" Width="130" Margin="0,0,10,0" />
-                                <CheckBox Content="Kế toán XML" IsChecked="{Binding EditAllowAccounting}" Margin="0,0,8,0" />
-                                <CheckBox Content="Pháp chế Diff" IsChecked="{Binding EditAllowLegal}" Margin="0,0,8,0" />
-                                <CheckBox Content="Văn phòng PDF" IsChecked="{Binding EditAllowOffice}" />
+                            <TextBlock Text="Phân quyền (Hỗ trợ nhiều chức vụ cùng lúc)" FontWeight="SemiBold" />
+                            <WrapPanel Margin="0,6,0,4">
+                                <CheckBox Content="Manager (Giám đốc)" IsChecked="{Binding EditRoleDirector}" Margin="0,0,8,4" />
+                                <CheckBox Content="Accounting (Kế toán)" IsChecked="{Binding EditRoleAccounting}" Margin="0,0,8,4" />
+                                <CheckBox Content="Legal (Pháp chế)" IsChecked="{Binding EditRoleLegal}" Margin="0,0,8,4" />
+                                <CheckBox Content="HR (Nhân sự)" IsChecked="{Binding EditRoleHr}" Margin="0,0,8,4" />
+                                <CheckBox Content="Staff (Nhân viên)" IsChecked="{Binding EditRoleStaff}" Margin="0,0,8,4" />
+                            </WrapPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,2,0,8">
+                                <CheckBox Content="Module Kế toán XML" IsChecked="{Binding EditAllowAccounting}" Margin="0,0,8,0" />
+                                <CheckBox Content="Module Pháp chế Diff" IsChecked="{Binding EditAllowLegal}" Margin="0,0,8,0" />
+                                <CheckBox Content="Module Văn phòng PDF" IsChecked="{Binding EditAllowOffice}" />
                             </StackPanel>
                             <WrapPanel>
                                 <ui:Button Appearance="Primary" Content="Cập nhật Phân quyền" Command="{Binding ApplyPolicyToSelectedWorkstationCommand}" Margin="0,0,8,6" />
@@ -230,8 +236,14 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
 
+                        <WrapPanel Margin="0,0,0,4">
+                            <CheckBox Content="Manager (Giám đốc)" IsChecked="{Binding ApproveRoleDirector}" Margin="0,0,8,4" />
+                            <CheckBox Content="Accounting (Kế toán)" IsChecked="{Binding ApproveRoleAccounting}" Margin="0,0,8,4" />
+                            <CheckBox Content="Legal (Pháp chế)" IsChecked="{Binding ApproveRoleLegal}" Margin="0,0,8,4" />
+                            <CheckBox Content="HR (Nhân sự)" IsChecked="{Binding ApproveRoleHr}" Margin="0,0,8,4" />
+                            <CheckBox Content="Staff (Nhân viên)" IsChecked="{Binding ApproveRoleStaff}" Margin="0,0,8,4" />
+                        </WrapPanel>
                         <WrapPanel>
-                            <ComboBox ItemsSource="{Binding AvailableRoles}" SelectedItem="{Binding ApproveRole}" Width="125" Margin="0,0,8,6" />
                             <CheckBox Content="Kế toán" IsChecked="{Binding ApproveAccounting}" Margin="0,0,8,6" />
                             <CheckBox Content="Pháp chế" IsChecked="{Binding ApproveLegal}" Margin="0,0,8,6" />
                             <CheckBox Content="Văn phòng" IsChecked="{Binding ApproveOffice}" Margin="0,0,12,6" />

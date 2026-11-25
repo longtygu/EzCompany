@@ -1,3 +1,4 @@
+using EzCompany.Core.LanAgent.Collaboration;
 using EzCompany.Core.LanAgent.Database;
 using EzCompany.Core.LanAgent.Discovery;
 using EzCompany.Core.LanAgent.Pairing;
@@ -33,6 +34,9 @@ public static class LanAgentServiceCollectionExtensions
         services.AddSingleton<LanTaskClient>();
         services.AddSingleton<PeerTaskSyncService>();
         services.AddHostedService(sp => sp.GetRequiredService<PeerTaskSyncService>());
+        services.AddSingleton<LanCollaborationClient>();
+        services.AddSingleton<PeerCollabSyncService>();
+        services.AddHostedService(sp => sp.GetRequiredService<PeerCollabSyncService>());
         services.AddSingleton<DirectorLanClient>();
 
         services.AddSingleton<LanAgentHost>();

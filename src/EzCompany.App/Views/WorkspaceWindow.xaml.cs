@@ -29,6 +29,11 @@ public partial class WorkspaceWindow : FluentWindow
             Dispatcher.Invoke(() => viewModel.RebuildNavigation());
         };
 
+        viewModel.LogoRefreshRequested += (_, _) =>
+        {
+            Dispatcher.InvokeAsync(async () => await viewModel.RefreshCompanyLogoAsync());
+        };
+
         viewModel.LogoutRequested += (_, _) =>
         {
             Dispatcher.Invoke(() =>
@@ -44,11 +49,11 @@ public partial class WorkspaceWindow : FluentWindow
             });
         };
 
-        Loaded += (_, _) =>
+        Loaded += async (_, _) =>
         {
             appearance.ApplyToWindow(this);
             _windowAccessor.RegisterWindow(this);
-            viewModel.InitializeWorkspace();
+            await viewModel.InitializeWorkspaceAsync();
         };
         Closed += (_, _) => _windowAccessor.UnregisterWindow(this);
     }

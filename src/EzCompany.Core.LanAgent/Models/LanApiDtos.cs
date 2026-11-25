@@ -137,9 +137,76 @@ public sealed record TaskSyncPayloadDto(
     string ReviewNotes,
     string SyncAction,
     string HistoryNote,
-    string SenderSignedPolicyJson);
+    string SenderSignedPolicyJson,
+    string? AssignmentFileName = null,
+    string? AssignmentFileSha256 = null,
+    string? AssignmentFileBase64 = null);
 
 public sealed record TaskSyncAckDto(bool Accepted, string Message);
+
+public sealed record CompanyBrandingDto(
+    Guid CompanyId,
+    string? CompanyLogoBase64,
+    DateTimeOffset? UpdatedAtUtc);
+
+public sealed record ChatSyncEnvelopeDto(
+    Guid ConversationId,
+    Guid CompanyId,
+    string ConversationType,
+    string ConversationName,
+    string MemberMachineIdsJson,
+    string MemberNamesJson,
+    Guid? PinnedTaskId,
+    string? PinnedTaskSummary,
+    Guid MessageId,
+    string SenderMachineId,
+    string SenderUsername,
+    string SenderFullName,
+    string Content,
+    string? AttachmentFileName,
+    string? AttachmentSha256,
+    string? AttachmentBase64,
+    long AttachmentSizeBytes,
+    Guid? LinkedTaskId,
+    DateTimeOffset SentAtUtc,
+    string SenderSignedPolicyJson);
+
+public sealed record ChatHistoryPullResponseDto(IReadOnlyList<ChatSyncEnvelopeDto> Messages);
+
+public sealed record TimelinePlanDto(
+    Guid Id,
+    Guid CompanyId,
+    string Title,
+    string Description,
+    string Category,
+    DateTimeOffset StartDateUtc,
+    DateTimeOffset EndDateUtc,
+    string Status,
+    string CreatedByMachineId,
+    string CreatedByUsername,
+    string CreatedByFullName,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc,
+    bool IsDeleted);
+
+public sealed record TimelineSyncRequestDto(
+    IReadOnlyList<TimelinePlanDto> Plans,
+    string SenderSignedPolicyJson);
+
+public sealed record AttendanceSyncDto(
+    Guid Id,
+    Guid CompanyId,
+    string EmployeeCode,
+    string EmployeeName,
+    string MachineId,
+    string DateKey,
+    DateTimeOffset? CheckInUtc,
+    DateTimeOffset? CheckOutUtc,
+    double WorkedHours,
+    string Status,
+    string Notes,
+    DateTimeOffset UpdatedAtUtc,
+    string SenderSignedPolicyJson);
 
 public sealed record AccountResetInitiateRequestDto(
     string MachineId,

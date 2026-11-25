@@ -1,0 +1,164 @@
+<UserControl x:Class="EzCompany.App.Views.HrAttendanceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <ScrollViewer Padding="20" VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="{DynamicResource AppCardMaxWidth}" HorizontalAlignment="Center">
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Quản lý Hồ sơ Nhân viên &amp; Chấm công" FontSize="{DynamicResource AppFontSizeTitle}" FontWeight="Bold" />
+                    <TextBlock Text="{Binding TodayCheckStatus}" Margin="0,4,0,0" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" />
+                    <TextBlock Text="{Binding StatusBanner}" Margin="0,4,0,0" Opacity="0.8" TextWrapping="Wrap" Visibility="{Binding StatusBanner, Converter={StaticResource NotEmptyToVis}}" />
+                </StackPanel>
+                <ui:Button Grid.Column="1" Appearance="Primary" Content="Chấm công VÀO" Command="{Binding CheckInTodayCommand}" Margin="0,0,8,0" />
+                <ui:Button Grid.Column="2" Appearance="Secondary" Content="Chấm công RA" Command="{Binding CheckOutTodayCommand}" Margin="0,0,8,0" />
+                <ui:Button Grid.Column="3" Content="Làm mới" Command="{Binding RefreshAllCommand}" />
+            </Grid>
+
+            <TabControl>
+                <TabItem Header="1. Hồ sơ Nhân viên">
+                    <StackPanel Margin="0,12,0,0">
+                        <WrapPanel Margin="0,0,0,10">
+                            <ui:Button Content="Tạo mới" Command="{Binding NewEmployeeFormCommand}" Margin="0,0,8,0" />
+                            <ui:Button Content="Đồng bộ từ máy trạm LAN" Command="{Binding SyncFromLanDevicesCommand}" Margin="0,0,8,0" />
+                            <ui:Button Content="Xóa hồ sơ đang chọn" Command="{Binding DeleteEmployeeCommand}" />
+                        </WrapPanel>
+
+                        <DataGrid ItemsSource="{Binding Employees}"
+                                  SelectedItem="{Binding SelectedEmployee}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  MaxHeight="185"
+                                  Margin="0,0,0,12">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Mã NV" Binding="{Binding EmployeeCode}" Width="90" />
+                                <DataGridTextColumn Header="Họ tên" Binding="{Binding FullName}" Width="160" />
+                                <DataGridTextColumn Header="Phòng ban" Binding="{Binding Department}" Width="120" />
+                                <DataGridTextColumn Header="Chức danh" Binding="{Binding PositionTitle}" Width="130" />
+                                <DataGridTextColumn Header="Vai trò" Binding="{Binding RolesCsv}" Width="140" />
+                                <DataGridTextColumn Header="Trạng thái" Binding="{Binding EmploymentStatus}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Chi tiết Hồ sơ Nhân viên" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Mã nhân viên (*)" FontSize="{DynamicResource AppFontSizeSmall}" Margin="0,0,0,3" />
+                                        <ui:TextBox Text="{Binding EditEmployeeCode, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Họ và tên (*)" FontSize="{DynamicResource AppFontSizeSmall}" Margin="0,0,0,3" />
+                                        <ui:TextBox Text="{Binding EditFullName, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4">
+                                        <TextBlock Text="Phòng ban" FontSize="{DynamicResource AppFontSizeSmall}" Margin="0,0,0,3" />
+                                        <ui:TextBox Text="{Binding EditDepartment, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Chức danh công việc" FontSize="{DynamicResource AppFontSizeSmall}" Margin="0,0,0,3" />
+                                        <ui:TextBox Text="{Binding EditPositionTitle, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Điện thoại" FontSize="{DynamicResource AppFontSizeSmall}" Margin="0,0,0,3" />
+                                        <ui:TextBox Text="{Binding EditPhone, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4">
+                                        <TextBlock Text="Email / CCCD" FontSize="{DynamicResource AppFontSizeSmall}" Margin="0,0,0,3" />
+                                        <ui:TextBox Text="{Binding EditEmail, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="Vai trò kiêm nhiệm:" FontSize="{DynamicResource AppFontSizeSmall}" Margin="0,10,0,4" />
+                                <WrapPanel>
+                                    <CheckBox Content="Manager (Giám đốc)" IsChecked="{Binding EditRoleDirector}" Margin="0,0,10,4" />
+                                    <CheckBox Content="Accounting (Kế toán)" IsChecked="{Binding EditRoleAccounting}" Margin="0,0,10,4" />
+                                    <CheckBox Content="Legal (Pháp chế)" IsChecked="{Binding EditRoleLegal}" Margin="0,0,10,4" />
+                                    <CheckBox Content="HR (Nhân sự)" IsChecked="{Binding EditRoleHr}" Margin="0,0,10,4" />
+                                    <CheckBox Content="Staff (Nhân viên)" IsChecked="{Binding EditRoleStaff}" Margin="0,0,10,4" />
+                                </WrapPanel>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0" ItemsSource="{Binding EmploymentStatuses}" SelectedItem="{Binding EditEmploymentStatus}" />
+                                    <ui:TextBox Grid.Column="2" Text="{Binding EditNotes, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Ghi chú hồ sơ..." />
+                                    <ui:Button Grid.Column="4" Appearance="Primary" Content="Lưu hồ sơ nhân viên" Command="{Binding SaveEmployeeCommand}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="2. Chấm công &amp; Xuất báo cáo Excel">
+                    <StackPanel Margin="0,12,0,0">
+                        <WrapPanel Margin="0,0,0,10">
+                            <TextBlock Text="Tháng:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox ItemsSource="{Binding AvailableMonths}" SelectedItem="{Binding SelectedMonth}" Width="80" Margin="0,0,12,0" />
+                            <TextBlock Text="Năm:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ui:TextBox Text="{Binding SelectedYear, UpdateSourceTrigger=PropertyChanged}" Width="80" Margin="0,0,12,0" />
+                            <ui:Button Appearance="Primary" Content="Xuất Báo cáo Chấm công (.xlsx)" Command="{Binding ExportMonthlyExcelCommand}" />
+                        </WrapPanel>
+
+                        <TextBlock Text="Tổng hợp tháng theo nhân viên" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <DataGrid ItemsSource="{Binding MonthlySummary}" AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="160" Margin="0,0,0,12">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Mã NV" Binding="{Binding EmployeeCode}" Width="90" />
+                                <DataGridTextColumn Header="Họ tên" Binding="{Binding EmployeeName}" Width="*" />
+                                <DataGridTextColumn Header="Đúng giờ" Binding="{Binding PresentDays}" Width="80" />
+                                <DataGridTextColumn Header="Đi muộn" Binding="{Binding LateDays}" Width="80" />
+                                <DataGridTextColumn Header="Nửa ngày" Binding="{Binding HalfDays}" Width="80" />
+                                <DataGridTextColumn Header="Nghỉ phép" Binding="{Binding LeaveDays}" Width="80" />
+                                <DataGridTextColumn Header="Vắng" Binding="{Binding AbsentDays}" Width="70" />
+                                <DataGridTextColumn Header="Tổng giờ" Binding="{Binding TotalWorkedHours, StringFormat=F2}" Width="85" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <TextBlock Text="Nhật ký chấm công hàng ngày" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <DataGrid ItemsSource="{Binding DailyRecords}" AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="200">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Ngày" Binding="{Binding DateKey}" Width="95" />
+                                <DataGridTextColumn Header="Mã NV" Binding="{Binding EmployeeCode}" Width="90" />
+                                <DataGridTextColumn Header="Họ tên" Binding="{Binding EmployeeName}" Width="150" />
+                                <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="90" />
+                                <DataGridTextColumn Header="Số giờ" Binding="{Binding WorkedHours, StringFormat=F2}" Width="75" />
+                                <DataGridTextColumn Header="Ghi chú" Binding="{Binding Notes}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </TabItem>
+            </TabControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

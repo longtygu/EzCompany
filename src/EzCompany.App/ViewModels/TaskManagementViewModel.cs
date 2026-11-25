@@ -48,6 +48,7 @@ public sealed partial class TaskManagementViewModel : ObservableObject
     [ObservableProperty] private string _newTaskDescription = string.Empty;
     [ObservableProperty] private string _newTaskPriority = WorkTaskPriorities.Normal;
     [ObservableProperty] private DateTime? _newTaskDueDate = DateTime.Today.AddDays(1);
+    [ObservableProperty] private string _newTaskAttachmentPath = string.Empty;
 
     [ObservableProperty] private WorkTaskEntity? _selectedInboxTask;
     [ObservableProperty] private string _handoverNotes = string.Empty;
@@ -111,6 +112,21 @@ public sealed partial class TaskManagementViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void BrowseNewTaskAttachment()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Chọn tệp đính kèm giao việc (tối đa 10 MB)",
+            Filter = "Tất cả tệp (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            NewTaskAttachmentPath = dialog.FileName;
+        }
+    }
+
+    [RelayCommand]
     private async Task AssignTaskAsync()
     {
         if (SelectedPeer is null)
@@ -137,11 +153,13 @@ public sealed partial class TaskManagementViewModel : ObservableObject
             NewTaskTitle,
             NewTaskDescription,
             NewTaskPriority,
-            dueUtc);
+            dueUtc,
+            string.IsNullOrWhiteSpace(NewTaskAttachmentPath) ? null : NewTaskAttachmentPath);
 
         int synced = await _peerTaskSync.FlushPendingTasksOnceAsync();
         NewTaskTitle = string.Empty;
         NewTaskDescription = string.Empty;
+        NewTaskAttachmentPath = string.Empty;
 
         StatusBanner = string.Equals(SelectedPeer.MachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase)
             ? "Đã tạo công việc cho chính bạn."
@@ -150,6 +168,31 @@ public sealed partial class TaskManagementViewModel : ObservableObject
                 : $"Máy {SelectedPeer.FullName} đang ngoại tuyến — đã đưa vào hàng đợi và sẽ tự gửi khi Online.");
 
         await RefreshAllAsync();
+    }
+
+    [RelayCommand]
+    private void OpenSelectedInboxAssignmentAttachment()
+    {
+        if (SelectedInboxTask is null || string.IsNullOrWhiteSpace(SelectedInboxTask.AssignmentVaultPath))
+        {
+            StatusBanner = "Công việc này không có tệp giao việc đính kèm.";
+            return;
+        }
+
+        string fullPath = Path.GetFullPath(Path.Combine(
+            _paths.VaultDirectory,
+            SelectedInboxTask.AssignmentVaultPath.Replace('/', Path.DirectorySeparatorChar)));
+
+        if (!File.Exists(fullPath))
+        {
+            StatusBanner = "Không tìm thấy tệp giao việc trong Vault cục bộ.";
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{fullPath}\"")
+        {
+            UseShellExecute = true
+        });
     }
 
     [RelayCommand]

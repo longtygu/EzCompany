@@ -68,6 +68,17 @@ public sealed class DirectorLanClient
         return (await resp.Content.ReadFromJsonAsync<ApplyPolicyResponseDto>(cancellationToken: ct).ConfigureAwait(false))!;
     }
 
+    public async Task PushCompanyBrandingAsync(
+        string endpoint,
+        CompanyBrandingDto dto,
+        CancellationToken ct = default)
+    {
+        byte[] body = JsonSerializer.SerializeToUtf8Bytes(dto);
+        using HttpResponseMessage resp = await SendSignedAsync(HttpMethod.Post, endpoint, "/api/v1/company/branding", body, ct)
+            .ConfigureAwait(false);
+        resp.EnsureSuccessStatusCode();
+    }
+
     public async Task<IReadOnlyList<VaultFileEntryDto>> GetVaultTreeAsync(string endpoint, CancellationToken ct = default)
     {
         using HttpResponseMessage resp = await SendSignedAsync(HttpMethod.Get, endpoint, "/api/v1/vault/tree", null, ct)

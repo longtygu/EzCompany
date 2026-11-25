@@ -3,14 +3,15 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  Title="{Binding WindowTitle}"
+                 Icon="pack://application:,,,/Assets/EzCompany.ico"
                  FontSize="{DynamicResource AppFontSize}"
-                 Width="1280"
-                 Height="820"
-                 MinWidth="1024"
-                 MinHeight="680"
+                 Width="1320"
+                 Height="840"
+                 MinWidth="1040"
+                 MinHeight="700"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
-                 WindowBackdropType="Mica">
+                 WindowBackdropType="None">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -39,7 +40,7 @@
         <Border Grid.Row="1"
                 Margin="16,8,16,0"
                 Padding="12,10"
-                CornerRadius="8"
+                CornerRadius="{DynamicResource AppCardCornerRadius}"
                 Background="#55B00020"
                 Visibility="{Binding IsPolicyLocked, Converter={StaticResource BoolToVis}}">
             <TextBlock Text="{Binding PolicyLockReason}"
@@ -47,22 +48,29 @@
                        TextWrapping="Wrap" />
         </Border>
 
-        <!-- LAN Internal Notice Banner -->
+        <!-- LAN Internal / Task / Chat Notification Banner -->
         <Border Grid.Row="2"
                 Margin="16,8,16,0"
                 Padding="12,10"
-                CornerRadius="8"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                Background="{DynamicResource AppCardBackgroundBrush}"
                 BorderThickness="1"
-                BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource AppAccentBrush}"
                 Visibility="{Binding ActiveNoticeBanner, Converter={StaticResource NotEmptyToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding ActiveNoticeBanner}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                <ui:Button Grid.Column="1" Content="Đóng" Command="{Binding DismissNoticeCommand}" />
+                <TextBlock Grid.Column="0" Text="{Binding ActiveNoticeBanner}" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold" />
+                <ui:Button Grid.Column="1"
+                           Appearance="Primary"
+                           Content="Xem ngay"
+                           Command="{Binding OpenNoticeTargetCommand}"
+                           Visibility="{Binding HasNoticeAction, Converter={StaticResource BoolToVis}}"
+                           Margin="0,0,8,0" />
+                <ui:Button Grid.Column="2" Content="Đóng" Command="{Binding DismissNoticeCommand}" />
             </Grid>
         </Border>
 
@@ -76,15 +84,43 @@
 
             <Border Grid.Column="0"
                     Padding="10"
-                    CornerRadius="10"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="{DynamicResource AppCardCornerRadius}"
+                    Background="{DynamicResource AppCardBackgroundBrush}"
                     BorderThickness="1"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="6,4,6,12">
-                        <TextBlock Text="{Binding CompanyTitle}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding UserSubtitle}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" Margin="0,2,0,0" />
+                    <!-- Header with Company Logo & Bilingual Role -->
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,4,4,12">
+                        <Image Source="{Binding CompanyLogoImage}"
+                               Width="38"
+                               Height="38"
+                               Stretch="Uniform"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CompanyTitle}" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxWidth="175" />
+                            <TextBlock Text="{Binding UserSubtitle}" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.78" TextWrapping="Wrap" MaxWidth="175" Margin="0,2,0,0" />
+                        </StackPanel>
                     </StackPanel>
+
+                    <!-- Pinned Bottom Unified Settings Button -->
+                    <Border DockPanel.Dock="Bottom"
+                            Margin="0,8,0,0"
+                            Padding="0,8,0,0"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                        <ui:Button HorizontalAlignment="Stretch"
+                                   Appearance="Secondary"
+                                   Command="{Binding OpenSettingsCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Settings24" Margin="0,0,8,0" />
+                                <StackPanel>
+                                    <TextBlock Text="Cài đặt" FontWeight="SemiBold" HorizontalAlignment="Left" />
+                                    <TextBlock Text="Giao diện, Tài khoản, Cập nhật, Báo lỗi" FontSize="11" Opacity="0.7" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ui:Button>
+                    </Border>
 
                     <ListBox ItemsSource="{Binding NavigationItems}"
                              SelectedItem="{Binding SelectedNavItem}"
@@ -103,8 +139,8 @@
             </Border>
 
             <Border Grid.Column="2"
-                    CornerRadius="10"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="{DynamicResource AppCardCornerRadius}"
+                    Background="{DynamicResource AppCardBackgroundBrush}"
                     BorderThickness="1"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
                 <ContentControl Content="{Binding ActiveView}" />

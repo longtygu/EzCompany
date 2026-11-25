@@ -125,6 +125,7 @@ public sealed class WorkTaskService
         string description,
         string priority,
         DateTimeOffset? dueDateUtc,
+        string? assignmentAttachmentPath = null,
         CancellationToken ct = default)
     {
         EnsureActiveSession();
@@ -138,12 +139,24 @@ public sealed class WorkTaskService
             throw new ArgumentException("Vui lòng nhập tiêu đề công việc.", nameof(title));
         }
 
+        Guid taskId = Guid.NewGuid();
         DateTimeOffset now = _timeProvider.GetUtcNow();
         bool isSelfTarget = string.Equals(assigneeMachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase);
 
+        string? attachName = null;
+        string? attachVaultPath = null;
+        string? attachSha = null;
+        if (!string.IsNullOrWhiteSpace(assignmentAttachmentPath))
+        {
+            (attachName, attachVaultPath, attachSha) = await CopyTaskAttachmentToVaultAsync(
+                taskId,
+                assignmentAttachmentPath,
+                ct).ConfigureAwait(false);
+        }
+
         var entity = new WorkTaskEntity
         {
-            Id = Guid.NewGuid(),
+            Id = taskId,
             CompanyId = _session.CompanyId,
             TaskKind = WorkTaskKinds.Assigned,
             Title = title.Trim(),
@@ -161,6 +174,9 @@ public sealed class WorkTaskService
             DueDateUtc = dueDateUtc,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
+            AssignmentFileName = attachName,
+            AssignmentVaultPath = attachVaultPath,
+            AssignmentFileSha256 = attachSha,
             PendingSyncTargetMachineId = isSelfTarget ? null : assigneeMachineId.Trim(),
             PendingSyncAction = isSelfTarget ? null : "Assign"
         };
@@ -170,8 +186,8 @@ public sealed class WorkTaskService
         db.WorkTaskHistories.Add(BuildHistory(
             entity.Id,
             "Assigned",
-            $"Giao việc tới {entity.AssigneeFullName} ({entity.AssigneeRole}).",
-            null,
+            $"Giao việc tới {entity.AssigneeFullName} ({CompanyRoles.FormatRolesBilingual(entity.AssigneeRole)}).",
+            attachName,
             now));
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -179,7 +195,7 @@ public sealed class WorkTaskService
             "TASK_ASSIGNED",
             "core.tasks",
             entity.Title,
-            $"To={entity.AssigneeUsername}@{entity.AssigneeMachineId}",
+            $"To={entity.AssigneeUsername}@{entity.AssigneeMachineId};Attachment={attachName ?? "-"}",
             "Info",
             ct).ConfigureAwait(false);
         _eventBus.Publish(new WorkTaskUpdatedEvent(entity.Id, "Assigned", entity.Title, _session.FullName, now));
@@ -403,37 +419,25 @@ public sealed class WorkTaskService
         string actorFullName,
         string syncAction,
         string historyNote,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        byte[]? assignmentAttachmentBytes = null)
     {
         ArgumentNullException.ThrowIfNull(incoming);
         DateTimeOffset now = _timeProvider.GetUtcNow();
 
-        string? savedRelVaultPath = null;
-        string? savedFileName = null;
-        string? savedSha256 = incoming.HandoverFileSha256;
+        (string? savedRelVaultPath, string? savedFileName, string? savedSha256) = await SaveIncomingAttachmentBytesAsync(
+            incoming.Id,
+            attachmentBytes,
+            incoming.HandoverFileName,
+            incoming.HandoverFileSha256,
+            ct).ConfigureAwait(false);
 
-        if (attachmentBytes is { Length: > 0 } && !string.IsNullOrWhiteSpace(incoming.HandoverFileName))
-        {
-            if (attachmentBytes.Length > MaxAttachmentSizeBytes)
-            {
-                throw new InvalidOperationException("Tệp bàn giao nhận qua LAN vượt quá 10 MB.");
-            }
-
-            string computedSha = Convert.ToHexString(SHA256.HashData(attachmentBytes)).ToLowerInvariant();
-            if (!string.IsNullOrWhiteSpace(incoming.HandoverFileSha256) &&
-                !string.Equals(computedSha, incoming.HandoverFileSha256, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new CryptographicException("Mã băm SHA-256 của tệp bàn giao không khớp.");
-            }
-
-            savedFileName = SanitizeFileName(incoming.HandoverFileName);
-            string relPath = Path.Combine("Tasks", incoming.Id.ToString("N"), savedFileName);
-            string fullDest = Path.Combine(_paths.VaultDirectory, relPath);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullDest)!);
-            await File.WriteAllBytesAsync(fullDest, attachmentBytes, ct).ConfigureAwait(false);
-            savedRelVaultPath = relPath.Replace('\\', '/');
-            savedSha256 = computedSha;
-        }
+        (string? assignRelVaultPath, string? assignFileName, string? assignSha256) = await SaveIncomingAttachmentBytesAsync(
+            incoming.Id,
+            assignmentAttachmentBytes,
+            incoming.AssignmentFileName,
+            incoming.AssignmentFileSha256,
+            ct).ConfigureAwait(false);
 
         await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         WorkTaskEntity? existing = await db.WorkTasks.FirstOrDefaultAsync(x => x.Id == incoming.Id, ct).ConfigureAwait(false);
@@ -461,9 +465,12 @@ public sealed class WorkTaskService
                 CreatedAtUtc = incoming.CreatedAtUtc,
                 UpdatedAtUtc = incoming.UpdatedAtUtc,
                 CompletedAtUtc = incoming.CompletedAtUtc,
+                AssignmentFileName = assignFileName ?? incoming.AssignmentFileName,
+                AssignmentVaultPath = assignRelVaultPath,
+                AssignmentFileSha256 = assignSha256,
                 HandoverNotes = incoming.HandoverNotes,
                 HandoverFileName = savedFileName ?? incoming.HandoverFileName,
-                HandoverVaultPath = savedRelVaultPath ?? existing?.HandoverVaultPath,
+                HandoverVaultPath = savedRelVaultPath,
                 HandoverFileSha256 = savedSha256,
                 HandedOverAtUtc = incoming.HandedOverAtUtc,
                 ReviewNotes = incoming.ReviewNotes,
@@ -484,6 +491,12 @@ public sealed class WorkTaskService
             existing.HandoverNotes = incoming.HandoverNotes;
             existing.HandedOverAtUtc = incoming.HandedOverAtUtc;
             existing.ReviewNotes = incoming.ReviewNotes;
+            if (assignFileName is not null)
+            {
+                existing.AssignmentFileName = assignFileName;
+                existing.AssignmentVaultPath = assignRelVaultPath;
+                existing.AssignmentFileSha256 = assignSha256;
+            }
             if (savedFileName is not null)
             {
                 existing.HandoverFileName = savedFileName;
@@ -503,7 +516,7 @@ public sealed class WorkTaskService
             ActorUsername = actorUsername,
             ActorFullName = actorFullName,
             Note = historyNote,
-            AttachmentFileName = savedFileName ?? incoming.HandoverFileName,
+            AttachmentFileName = savedFileName ?? assignFileName ?? incoming.HandoverFileName ?? incoming.AssignmentFileName,
             TimestampUtc = now
         });
 
@@ -511,7 +524,77 @@ public sealed class WorkTaskService
         await _audit.LogAsync("TASK_SYNC_RECEIVED", "core.tasks", existing.Title, $"From={actorUsername};Action={syncAction}", "Info", ct)
             .ConfigureAwait(false);
         _eventBus.Publish(new WorkTaskUpdatedEvent(existing.Id, syncAction, existing.Title, actorFullName, now));
+
+        if (string.Equals(syncAction, "Assign", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(existing.AssigneeMachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+        {
+            _eventBus.Publish(new TaskAssignedNotificationEvent(
+                existing.Id,
+                existing.Title,
+                existing.AssignerFullName,
+                existing.Priority,
+                existing.DueDateUtc));
+        }
+
         return existing;
+    }
+
+    private async Task<(string FileName, string RelVaultPath, string Sha256)> CopyTaskAttachmentToVaultAsync(
+        Guid taskId,
+        string sourcePath,
+        CancellationToken ct)
+    {
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException("Không tìm thấy tệp đính kèm.", sourcePath);
+        }
+
+        byte[] fileBytes = await File.ReadAllBytesAsync(sourcePath, ct).ConfigureAwait(false);
+        if (fileBytes.Length > MaxAttachmentSizeBytes)
+        {
+            throw new InvalidOperationException("Tệp đính kèm vượt quá giới hạn 10 MB.");
+        }
+
+        string safeFileName = SanitizeFileName(Path.GetFileName(sourcePath));
+        string relPath = Path.Combine("Tasks", taskId.ToString("N"), safeFileName);
+        string fullDest = Path.Combine(_paths.VaultDirectory, relPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullDest)!);
+        await File.WriteAllBytesAsync(fullDest, fileBytes, ct).ConfigureAwait(false);
+
+        string sha = Convert.ToHexString(SHA256.HashData(fileBytes)).ToLowerInvariant();
+        return (safeFileName, relPath.Replace('\\', '/'), sha);
+    }
+
+    private async Task<(string? RelVaultPath, string? FileName, string? Sha256)> SaveIncomingAttachmentBytesAsync(
+        Guid taskId,
+        byte[]? attachmentBytes,
+        string? rawFileName,
+        string? expectedSha256,
+        CancellationToken ct)
+    {
+        if (attachmentBytes is not { Length: > 0 } || string.IsNullOrWhiteSpace(rawFileName))
+        {
+            return (null, null, expectedSha256);
+        }
+
+        if (attachmentBytes.Length > MaxAttachmentSizeBytes)
+        {
+            throw new InvalidOperationException("Tệp đính kèm nhận qua LAN vượt quá 10 MB.");
+        }
+
+        string computedSha = Convert.ToHexString(SHA256.HashData(attachmentBytes)).ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(expectedSha256) &&
+            !string.Equals(computedSha, expectedSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CryptographicException("Mã băm SHA-256 của tệp đính kèm không khớp.");
+        }
+
+        string savedFileName = SanitizeFileName(rawFileName);
+        string relPath = Path.Combine("Tasks", taskId.ToString("N"), savedFileName);
+        string fullDest = Path.Combine(_paths.VaultDirectory, relPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullDest)!);
+        await File.WriteAllBytesAsync(fullDest, attachmentBytes, ct).ConfigureAwait(false);
+        return (relPath.Replace('\\', '/'), savedFileName, computedSha);
     }
 
     public async Task<IReadOnlyList<WorkTaskEntity>> GetTodaySelfTasksAsync(CancellationToken ct = default)

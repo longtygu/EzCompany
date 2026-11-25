@@ -1,7 +1,9 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Documents;
 using System.Windows.Media;
+using CommunityToolkit.Mvvm.ComponentModel;
 using EzCompany.Core.Abstractions;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
@@ -9,14 +11,15 @@ using Wpf.Ui.Controls;
 namespace EzCompany.App.Services;
 
 /// <summary>
-/// Persists and live-applies per-profile UI appearance customization:
-/// Light/Dark theme, Accent Color, Font Size, Card Width/Radius/Padding, Sidebar Width, Window Opacity &amp; Backdrop.
+/// Persists and live-applies per-profile UI appearance customization without triggering redundant
+/// full theme reloads that could corrupt window backdrop tint colors.
 /// </summary>
-public sealed class AppearanceSettingsService
+public sealed class AppearanceSettingsService : ObservableObject
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     private readonly string _settingsFilePath;
+    private bool? _lastAppliedDarkMode;
 
     public AppearanceSettingsService(ILocalStoragePaths paths)
     {
@@ -28,7 +31,7 @@ public sealed class AppearanceSettingsService
 
     public event EventHandler<AppearanceSettings>? SettingsChanged;
 
-    public static IReadOnlyList<string> AvailableBackdrops { get; } = ["Mica", "Acrylic", "Tabbed", "None"];
+    public static IReadOnlyList<string> AvailableBackdrops { get; } = ["None", "Mica", "Acrylic", "Tabbed"];
 
     public static IReadOnlyList<(string Name, string Hex)> AccentPresets { get; } =
     [
@@ -53,6 +56,7 @@ public sealed class AppearanceSettingsService
         }
 
         ApplyToWpfApplication(normalized);
+        OnPropertyChanged(nameof(Current));
         SettingsChanged?.Invoke(this, normalized);
         return normalized;
     }
@@ -62,26 +66,26 @@ public sealed class AppearanceSettingsService
     public void ApplyToWindow(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        if (window is FluentWindow fluent)
-        {
-            fluent.WindowBackdropType = ParseBackdrop(Current.BackdropType);
-        }
-
-        WindowTransparencyHelper.ApplyOpacity(window, Current.WindowOpacity);
+        TextElement.SetFontSize(window, Current.BaseFontSize);
+        WindowTransparencyHelper.ApplyOpacityAndBackdrop(
+            window,
+            Current.WindowOpacity,
+            Current.BackdropType,
+            Current.IsDarkMode);
     }
 
     public static AppearanceSettings Normalize(AppearanceSettings source)
     {
         AppearanceSettings copy = source.Clone();
         copy.BaseFontSize = Math.Round(Math.Clamp(copy.BaseFontSize, 11.0, 20.0), 1);
-        copy.CardMaxWidth = Math.Round(Math.Clamp(copy.CardMaxWidth, 640.0, 1600.0), 0);
+        copy.CardMaxWidth = Math.Round(Math.Clamp(copy.CardMaxWidth, 560.0, 1600.0), 0);
         copy.CardCornerRadius = Math.Round(Math.Clamp(copy.CardCornerRadius, 4.0, 20.0), 0);
         copy.CardPadding = Math.Round(Math.Clamp(copy.CardPadding, 8.0, 28.0), 0);
         copy.SidebarWidth = Math.Round(Math.Clamp(copy.SidebarWidth, 210.0, 340.0), 0);
         copy.WindowOpacity = Math.Round(Math.Clamp(copy.WindowOpacity, 0.70, 1.00), 2);
         copy.AccentColorHex = NormalizeHex(copy.AccentColorHex);
         copy.BackdropType = AvailableBackdrops.FirstOrDefault(
-            b => string.Equals(b, copy.BackdropType, StringComparison.OrdinalIgnoreCase)) ?? "Mica";
+            b => string.Equals(b, copy.BackdropType, StringComparison.OrdinalIgnoreCase)) ?? "None";
         return copy;
     }
 
@@ -93,10 +97,15 @@ public sealed class AppearanceSettingsService
         }
 
         ApplicationTheme theme = settings.IsDarkMode ? ApplicationTheme.Dark : ApplicationTheme.Light;
-        WindowBackdropType backdrop = ParseBackdrop(settings.BackdropType);
         Color accentColor = ParseColor(settings.AccentColorHex);
 
-        ApplicationThemeManager.Apply(theme, backdrop, updateAccent: false);
+        // Only reload the heavy WPF-UI Theme dictionary when Dark/Light actually changes so material/sliders never corrupt theme colors.
+        if (_lastAppliedDarkMode != settings.IsDarkMode)
+        {
+            ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: false);
+            _lastAppliedDarkMode = settings.IsDarkMode;
+        }
+
         ApplicationAccentColorManager.Apply(accentColor, theme, false, true);
 
         ResourceDictionary res = Application.Current.Resources;
@@ -110,14 +119,14 @@ public sealed class AppearanceSettingsService
         res["AppSidebarWidth"] = new GridLength(settings.SidebarWidth);
         res["AppAccentBrush"] = new SolidColorBrush(accentColor);
 
+        Color cardBg = settings.IsDarkMode
+            ? Color.FromRgb(0x25, 0x28, 0x30)
+            : Color.FromRgb(0xFF, 0xFF, 0xFF);
+        res["AppCardBackgroundBrush"] = new SolidColorBrush(cardBg);
+
         foreach (Window win in Application.Current.Windows)
         {
-            if (win is FluentWindow fluent)
-            {
-                fluent.WindowBackdropType = backdrop;
-            }
-
-            WindowTransparencyHelper.ApplyOpacity(win, settings.WindowOpacity);
+            ApplyToWindow(win);
         }
     }
 
@@ -154,14 +163,6 @@ public sealed class AppearanceSettingsService
         {
         }
     }
-
-    private static WindowBackdropType ParseBackdrop(string? name) => name switch
-    {
-        "Acrylic" => WindowBackdropType.Acrylic,
-        "Tabbed" => WindowBackdropType.Tabbed,
-        "None" => WindowBackdropType.None,
-        _ => WindowBackdropType.Mica
-    };
 
     private static string NormalizeHex(string? hex)
     {

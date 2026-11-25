@@ -86,6 +86,10 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_rootServices.GetRequiredService<PairingSessionManager>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<AccountRecoveryManager>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<WorkTaskService>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<CompanyBrandingService>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<ChatService>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<TimelinePlanService>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<HrAttendanceService>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<NonceReplayCache>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<VaultPathGuard>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<DatabaseSnapshotService>());
@@ -571,6 +575,12 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 attachmentBytes = Convert.FromBase64String(dto.HandoverFileBase64);
             }
 
+            byte[]? assignmentAttachmentBytes = null;
+            if (!string.IsNullOrWhiteSpace(dto.AssignmentFileBase64))
+            {
+                assignmentAttachmentBytes = Convert.FromBase64String(dto.AssignmentFileBase64);
+            }
+
             var incoming = new WorkTaskEntity
             {
                 Id = dto.TaskId,
@@ -592,6 +602,8 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 CreatedAtUtc = dto.CreatedAtUtc,
                 UpdatedAtUtc = dto.UpdatedAtUtc,
                 CompletedAtUtc = dto.CompletedAtUtc,
+                AssignmentFileName = dto.AssignmentFileName,
+                AssignmentFileSha256 = dto.AssignmentFileSha256,
                 HandoverNotes = dto.HandoverNotes,
                 HandoverFileName = dto.HandoverFileName,
                 HandoverFileSha256 = dto.HandoverFileSha256,
@@ -607,9 +619,281 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 verified.Snapshot.FullName,
                 dto.SyncAction,
                 dto.HistoryNote,
-                ct).ConfigureAwait(false);
+                ct,
+                assignmentAttachmentBytes).ConfigureAwait(false);
 
             return Results.Ok(new TaskSyncAckDto(true, "Đã nhận và lưu công việc đồng bộ qua LAN."));
+        });
+
+        // 12. Company Branding Logo Sync (GET=Device-signed, POST=Director-signed)
+        app.MapGet("/api/v1/company/branding", async (
+            CompanyBrandingService branding,
+            CancellationToken ct) =>
+        {
+            (string? logoB64, DateTimeOffset? updatedAt, Guid companyId) =
+                await branding.GetCurrentBrandingTupleAsync(ct).ConfigureAwait(false);
+            return Results.Ok(new CompanyBrandingDto(companyId, logoB64, updatedAt));
+        });
+
+        app.MapPost("/api/v1/company/branding", async (
+            CompanyBrandingDto dto,
+            CompanyBrandingService branding,
+            CancellationToken ct) =>
+        {
+            bool applied = await branding.ApplyIncomingLogoSyncAsync(
+                dto.CompanyId,
+                dto.CompanyLogoBase64,
+                dto.UpdatedAtUtc,
+                ct).ConfigureAwait(false);
+            return Results.Ok(new { applied });
+        });
+
+        // 13. Internal P2P Chat Sync + Reverse History & Attachment Retrieval
+        app.MapPost("/api/v1/chat/sync", async (
+            HttpContext http,
+            ChatSyncEnvelopeDto dto,
+            LocalKeyStore keyStore,
+            PolicyEngine policyEngine,
+            ChatService chat,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            string callerDevicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            byte[]? pinnedRootPub = keyStore.LoadPinnedRootPublicKey();
+            if (pinnedRootPub is null || string.IsNullOrWhiteSpace(callerDevicePubB64))
+            {
+                return Results.Unauthorized();
+            }
+
+            PolicyVerificationResult verified = policyEngine.VerifyOffline(
+                dto.SenderSignedPolicyJson,
+                pinnedRootPub,
+                callerMachineId,
+                Convert.FromBase64String(callerDevicePubB64),
+                commitClockGuard: false);
+
+            if (!verified.IsValid)
+            {
+                return Results.Json(new { message = verified.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            byte[]? attachBytes = string.IsNullOrWhiteSpace(dto.AttachmentBase64)
+                ? null
+                : Convert.FromBase64String(dto.AttachmentBase64);
+
+            var conv = new ChatConversationEntity
+            {
+                Id = dto.ConversationId,
+                CompanyId = dto.CompanyId,
+                ConversationType = dto.ConversationType,
+                Name = dto.ConversationName,
+                MemberMachineIdsJson = dto.MemberMachineIdsJson,
+                MemberNamesJson = dto.MemberNamesJson,
+                PinnedTaskId = dto.PinnedTaskId,
+                PinnedTaskSummary = dto.PinnedTaskSummary,
+                CreatedAtUtc = dto.SentAtUtc,
+                UpdatedAtUtc = dto.SentAtUtc
+            };
+
+            var msg = new ChatMessageEntity
+            {
+                Id = dto.MessageId,
+                ConversationId = dto.ConversationId,
+                CompanyId = dto.CompanyId,
+                SenderMachineId = dto.SenderMachineId,
+                SenderUsername = verified.Snapshot!.Username,
+                SenderFullName = verified.Snapshot.FullName,
+                Content = dto.Content,
+                AttachmentFileName = dto.AttachmentFileName,
+                AttachmentSha256 = dto.AttachmentSha256,
+                AttachmentSizeBytes = dto.AttachmentSizeBytes,
+                LinkedTaskId = dto.LinkedTaskId,
+                SentAtUtc = dto.SentAtUtc
+            };
+
+            await chat.UpsertIncomingChatSyncAsync(conv, msg, attachBytes, ct).ConfigureAwait(false);
+            return Results.Ok(new { synced = true });
+        });
+
+        app.MapGet("/api/v1/chat/history", async (
+            DateTimeOffset? sinceUtc,
+            ChatService chat,
+            LocalKeyStore keyStore,
+            ILocalStoragePaths paths,
+            CancellationToken ct) =>
+        {
+            string localPolicy = keyStore.LoadPolicyLicenseJson() ?? string.Empty;
+            IReadOnlyList<(ChatConversationEntity Conv, ChatMessageEntity Msg)> pairs = await chat
+                .GetMessagesSinceAsync(sinceUtc ?? DateTimeOffset.UtcNow.AddDays(-14), 200, ct)
+                .ConfigureAwait(false);
+
+            var items = new List<ChatSyncEnvelopeDto>(pairs.Count);
+            foreach ((ChatConversationEntity c, ChatMessageEntity m) in pairs)
+            {
+                string? b64 = null;
+                if (!string.IsNullOrWhiteSpace(m.AttachmentVaultPath))
+                {
+                    string full = Path.GetFullPath(Path.Combine(paths.VaultDirectory, m.AttachmentVaultPath.Replace('/', Path.DirectorySeparatorChar)));
+                    if (File.Exists(full))
+                    {
+                        b64 = Convert.ToBase64String(await File.ReadAllBytesAsync(full, ct).ConfigureAwait(false));
+                    }
+                }
+
+                items.Add(new ChatSyncEnvelopeDto(
+                    c.Id, c.CompanyId, c.ConversationType, c.Name,
+                    c.MemberMachineIdsJson, c.MemberNamesJson,
+                    c.PinnedTaskId, c.PinnedTaskSummary,
+                    m.Id, m.SenderMachineId, m.SenderUsername, m.SenderFullName,
+                    m.Content, m.AttachmentFileName, m.AttachmentSha256, b64, m.AttachmentSizeBytes,
+                    m.LinkedTaskId, m.SentAtUtc, localPolicy));
+            }
+
+            return Results.Ok(new ChatHistoryPullResponseDto(items));
+        });
+
+        app.MapGet("/api/v1/chat/attachment/{messageId:guid}", async (
+            Guid messageId,
+            IDbContextFactory<AppDbContext> appDbFactory,
+            ILocalStoragePaths paths,
+            HttpContext http,
+            CancellationToken ct) =>
+        {
+            await using AppDbContext db = await appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+            ChatMessageEntity? msg = await db.ChatMessages.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == messageId, ct)
+                .ConfigureAwait(false);
+
+            if (msg is null || string.IsNullOrWhiteSpace(msg.AttachmentVaultPath))
+            {
+                return Results.NotFound();
+            }
+
+            string full = Path.GetFullPath(Path.Combine(paths.VaultDirectory, msg.AttachmentVaultPath.Replace('/', Path.DirectorySeparatorChar)));
+            if (!File.Exists(full))
+            {
+                return Results.NotFound();
+            }
+
+            byte[] bytes = await File.ReadAllBytesAsync(full, ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(msg.AttachmentSha256))
+            {
+                http.Response.Headers["X-Ez-Sha256"] = msg.AttachmentSha256;
+            }
+
+            return Results.File(bytes, "application/octet-stream", msg.AttachmentFileName ?? "attachment.bin");
+        });
+
+        // 14. Shared Timeline Plan Sync (Editable by both Director & Employees)
+        app.MapPost("/api/v1/timeline/sync", async (
+            HttpContext http,
+            TimelineSyncRequestDto req,
+            LocalKeyStore keyStore,
+            PolicyEngine policyEngine,
+            TimelinePlanService timeline,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            string callerDevicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            byte[]? pinnedRootPub = keyStore.LoadPinnedRootPublicKey();
+            if (pinnedRootPub is null || string.IsNullOrWhiteSpace(callerDevicePubB64))
+            {
+                return Results.Unauthorized();
+            }
+
+            PolicyVerificationResult verified = policyEngine.VerifyOffline(
+                req.SenderSignedPolicyJson,
+                pinnedRootPub,
+                callerMachineId,
+                Convert.FromBase64String(callerDevicePubB64),
+                commitClockGuard: false);
+
+            if (!verified.IsValid)
+            {
+                return Results.Json(new { message = verified.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            int changed = await timeline.UpsertIncomingPlansAsync(
+                req.Plans.Select(p => new TimelinePlanEntity
+                {
+                    Id = p.Id,
+                    CompanyId = p.CompanyId,
+                    Title = p.Title,
+                    Description = p.Description,
+                    Category = p.Category,
+                    StartDateUtc = p.StartDateUtc,
+                    EndDateUtc = p.EndDateUtc,
+                    Status = p.Status,
+                    CreatedByMachineId = p.CreatedByMachineId,
+                    CreatedByUsername = p.CreatedByUsername,
+                    CreatedByFullName = p.CreatedByFullName,
+                    CreatedAtUtc = p.CreatedAtUtc,
+                    UpdatedAtUtc = p.UpdatedAtUtc,
+                    IsDeleted = p.IsDeleted
+                }),
+                ct).ConfigureAwait(false);
+
+            return Results.Ok(new { changed });
+        });
+
+        app.MapGet("/api/v1/timeline/entries", async (
+            TimelinePlanService timeline,
+            CancellationToken ct) =>
+        {
+            IReadOnlyList<TimelinePlanEntity> all = await timeline.GetAllForSyncAsync(ct).ConfigureAwait(false);
+            return Results.Ok(all.Select(p => new TimelinePlanDto(
+                p.Id, p.CompanyId, p.Title, p.Description, p.Category,
+                p.StartDateUtc, p.EndDateUtc, p.Status,
+                p.CreatedByMachineId, p.CreatedByUsername, p.CreatedByFullName,
+                p.CreatedAtUtc, p.UpdatedAtUtc, p.IsDeleted)).ToArray());
+        });
+
+        // 15. HR Attendance Sync (Employee check-in/check-out pushed to Director/HR)
+        app.MapPost("/api/v1/hr/attendance/sync", async (
+            HttpContext http,
+            AttendanceSyncDto dto,
+            LocalKeyStore keyStore,
+            PolicyEngine policyEngine,
+            HrAttendanceService hr,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            string callerDevicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            byte[]? pinnedRootPub = keyStore.LoadPinnedRootPublicKey();
+            if (pinnedRootPub is null || string.IsNullOrWhiteSpace(callerDevicePubB64))
+            {
+                return Results.Unauthorized();
+            }
+
+            PolicyVerificationResult verified = policyEngine.VerifyOffline(
+                dto.SenderSignedPolicyJson,
+                pinnedRootPub,
+                callerMachineId,
+                Convert.FromBase64String(callerDevicePubB64),
+                commitClockGuard: false);
+
+            if (!verified.IsValid)
+            {
+                return Results.Json(new { message = verified.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            await hr.UpsertAttendanceRecordAsync(new AttendanceRecordEntity
+            {
+                Id = dto.Id,
+                CompanyId = dto.CompanyId,
+                EmployeeCode = dto.EmployeeCode,
+                EmployeeName = dto.EmployeeName,
+                MachineId = dto.MachineId,
+                DateKey = dto.DateKey,
+                CheckInUtc = dto.CheckInUtc,
+                CheckOutUtc = dto.CheckOutUtc,
+                WorkedHours = dto.WorkedHours,
+                Status = dto.Status,
+                Notes = dto.Notes,
+                UpdatedAtUtc = dto.UpdatedAtUtc
+            }, ct).ConfigureAwait(false);
+
+            return Results.Ok(new { synced = true });
         });
     }
 

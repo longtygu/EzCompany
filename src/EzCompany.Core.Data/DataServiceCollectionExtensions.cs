@@ -27,6 +27,10 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IAuditLogger, DatabaseAuditLogger>();
         services.AddSingleton<GenesisBootstrapService>();
         services.AddSingleton<WorkTaskService>();
+        services.AddSingleton<CompanyBrandingService>();
+        services.AddSingleton<ChatService>();
+        services.AddSingleton<TimelinePlanService>();
+        services.AddSingleton<HrAttendanceService>();
         return services;
     }
 }

@@ -61,11 +61,14 @@ public sealed class LocalStoragePaths : ILocalStoragePaths
         Directory.CreateDirectory(Path.Combine(VaultDirectory, "Legal", "Contracts"));
         Directory.CreateDirectory(Path.Combine(VaultDirectory, "Office"));
         Directory.CreateDirectory(Path.Combine(VaultDirectory, "Tasks"));
+        Directory.CreateDirectory(Path.Combine(VaultDirectory, "Chat"));
+        Directory.CreateDirectory(Path.Combine(VaultDirectory, "HR"));
         Directory.CreateDirectory(DirectorCacheDirectory);
         Directory.CreateDirectory(Path.Combine(DirectorCacheDirectory, "Snapshots"));
         Directory.CreateDirectory(BackupsDirectory);
         Directory.CreateDirectory(TempDirectory);
         Directory.CreateDirectory(LogsDirectory);
+        Directory.CreateDirectory(Path.Combine(ProfileRoot, "BugReports"));
     }
 
     public static string ParseProfileFromArgs(string[]? args)

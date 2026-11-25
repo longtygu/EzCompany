@@ -1,12 +1,15 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EzCompany.App.Services;
 using EzCompany.Core.Abstractions;
-using EzCompany.Core.Crypto;
 using EzCompany.Core.Data;
 using EzCompany.Core.Data.Entities;
+using EzCompany.Core.LanAgent.Collaboration;
 using EzCompany.Core.LanAgent.Tasks;
+using Microsoft.Win32;
 
 namespace EzCompany.App.ViewModels;
 
@@ -15,8 +18,11 @@ public sealed record AccentPresetOption(string Name, string Hex);
 public sealed partial class AccountAndAppearanceViewModel : ObservableObject
 {
     private readonly GenesisBootstrapService _bootstrap;
+    private readonly CompanyBrandingService _branding;
     private readonly LanTaskClient _taskClient;
+    private readonly LanCollaborationClient _collabClient;
     private readonly AppearanceSettingsService _appearance;
+    private readonly AppDiagnosticsAndRepairService _diagnostics;
     private readonly ISessionContext _session;
     private readonly IPermissionService _permissions;
     private readonly ILocalStoragePaths _paths;
@@ -26,16 +32,24 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
 
     public AccountAndAppearanceViewModel(
         GenesisBootstrapService bootstrap,
+        CompanyBrandingService branding,
         LanTaskClient taskClient,
+        LanCollaborationClient collabClient,
         AppearanceSettingsService appearance,
+        AppDiagnosticsAndRepairService diagnostics,
+        UpdatesSettingsViewModel updatesVm,
         ISessionContext session,
         IPermissionService permissions,
         ILocalStoragePaths paths,
         RollingFileLoggerProvider? fileLogger = null)
     {
         _bootstrap = bootstrap;
+        _branding = branding;
         _taskClient = taskClient;
+        _collabClient = collabClient;
         _appearance = appearance;
+        _diagnostics = diagnostics;
+        UpdatesVm = updatesVm;
         _session = session;
         _permissions = permissions;
         _paths = paths;
@@ -45,54 +59,70 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
             .Select(p => new AccentPresetOption(p.Name, p.Hex))
             .ToArray();
         AvailableBackdrops = AppearanceSettingsService.AvailableBackdrops;
-
-        LoadFromCurrentState();
     }
 
+    public UpdatesSettingsViewModel UpdatesVm { get; }
     public IReadOnlyList<AccentPresetOption> AccentPresets { get; }
     public IReadOnlyList<string> AvailableBackdrops { get; }
+    public IReadOnlyList<string> LogLevels { get; } = ["ALL", "INF", "WRN", "ERR"];
 
-    // Account profile & credentials
+    public ObservableCollection<string> RecentLogLines { get; } = [];
+    public ObservableCollection<DiagnosticRepairItem> DiagnosticResults { get; } = [];
+
+    // Tab 1: Appearance controls
+    [ObservableProperty] private bool _isDarkMode = true;
+    [ObservableProperty] private string _accentColorHex = "#0078D4";
+    [ObservableProperty] private double _baseFontSize = 14.0;
+    [ObservableProperty] private double _cardMaxWidth = 960.0;
+    [ObservableProperty] private double _cardCornerRadius = 10.0;
+    [ObservableProperty] private double _cardPadding = 16.0;
+    [ObservableProperty] private double _sidebarWidth = 260.0;
+    [ObservableProperty] private double _windowOpacity = 1.0;
+    [ObservableProperty] private string _backdropType = "None";
+    [ObservableProperty] private string _appearanceStatusMessage = string.Empty;
+
+    // Tab 2: Account & Company Logo
     [ObservableProperty] private string _fullName = string.Empty;
     [ObservableProperty] private string _username = string.Empty;
     [ObservableProperty] private string _roleDisplay = string.Empty;
     [ObservableProperty] private string _machineIdDisplay = string.Empty;
+    [ObservableProperty] private bool _isDirectorNode;
+    [ObservableProperty] private BitmapImage? _companyLogoPreview;
     [ObservableProperty] private string _accountStatusMessage = string.Empty;
-
-    // Station diagnostics
     [ObservableProperty] private string _policySummary = string.Empty;
     [ObservableProperty] private string _storageSummary = string.Empty;
     [ObservableProperty] private string _lanSummary = string.Empty;
     [ObservableProperty] private string _logSummary = string.Empty;
 
-    // Appearance controls
-    [ObservableProperty] private bool _isDarkMode = true;
-    [ObservableProperty] private string _accentColorHex = "#0078D4";
-    [ObservableProperty] private double _baseFontSize = 14.0;
-    [ObservableProperty] private double _cardMaxWidth = 1080.0;
-    [ObservableProperty] private double _cardCornerRadius = 10.0;
-    [ObservableProperty] private double _cardPadding = 16.0;
-    [ObservableProperty] private double _sidebarWidth = 260.0;
-    [ObservableProperty] private double _windowOpacity = 1.0;
-    [ObservableProperty] private string _backdropType = "Mica";
-    [ObservableProperty] private string _appearanceStatusMessage = string.Empty;
+    // Tab 4: Bug report, Log viewer, Self-repair
+    [ObservableProperty] private string _bugReportTitle = string.Empty;
+    [ObservableProperty] private string _bugReportDescription = string.Empty;
+    [ObservableProperty] private string _selectedLogLevel = "ALL";
+    [ObservableProperty] private string _diagnosticsStatusMessage = string.Empty;
 
-    public void LoadFromCurrentState()
+    public async Task LoadAllAsync()
     {
         FullName = _session.FullName;
         Username = _session.Username;
-        RoleDisplay = $"{_session.Role} ({(_session.IsDirectorNode ? "Giám đốc" : "Nhân viên")})";
+        IsDirectorNode = _session.IsDirectorNode;
+        RoleDisplay = $"{CompanyRoles.FormatRolesBilingual(_session.Role)} • MachineId: {_paths.MachineId}";
         MachineIdDisplay = _paths.MachineId;
 
         PolicySnapshot? policy = _permissions.CurrentPolicy;
         PolicySummary = policy is null
             ? "Chưa có policy.lic hợp lệ."
-            : $"Policy v{policy.PolicyVersion} • Vai trò: {policy.Role} • Hiệu lực đến: {policy.ExpiresAtUtc.ToLocalTime():yyyy-MM-dd HH:mm} • Kênh: {policy.AllowedUpdateChannel} (MaxApproved: {policy.MaxApprovedVersion})";
+            : $"Policy v{policy.PolicyVersion} • Chức danh: {CompanyRoles.FormatRolesBilingual(policy.Role)} • Hiệu lực đến: {policy.ExpiresAtUtc.ToLocalTime():yyyy-MM-dd HH:mm} • MaxApproved: {policy.MaxApprovedVersion}";
         StorageSummary = $"Profile: {_paths.ProfileName} • Vault: {_paths.VaultDirectory}";
         LanSummary = $"Cổng LAN Kestrel: {(_session.CurrentLanPort > 0 ? _session.CurrentLanPort : 0)} • Phiên bản App: {_session.CurrentAppVersion}";
         LogSummary = $"Nhật ký runtime: {_fileLogger?.CurrentLogFilePath ?? _paths.LogsDirectory}";
 
         SyncAppearanceFields(_appearance.Current);
+        UpdatesVm.Load();
+
+        byte[]? logoBytes = await _branding.GetCompanyLogoBytesAsync();
+        CompanyLogoPreview = CompanyLogoImageHelper.LoadFromBytesOrDefault(logoBytes);
+
+        await ReloadLogsAsync();
     }
 
     partial void OnIsDarkModeChanged(bool value) => PushAppearanceChange();
@@ -103,6 +133,7 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     partial void OnSidebarWidthChanged(double value) => PushAppearanceChange();
     partial void OnWindowOpacityChanged(double value) => PushAppearanceChange();
     partial void OnBackdropTypeChanged(string value) => PushAppearanceChange();
+    partial void OnSelectedLogLevelChanged(string value) => _ = ReloadLogsAsync();
 
     public async Task ChangeCredentialsAsync(string currentPassword, string newPassword, string confirmNewPassword)
     {
@@ -146,13 +177,52 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ApplyAccentPreset(string? hex)
+    private async Task UploadCompanyLogoAsync()
     {
-        if (string.IsNullOrWhiteSpace(hex))
+        var dialog = new OpenFileDialog
+        {
+            Title = "Chọn ảnh Logo Công ty (PNG / JPG, tối đa 2 MB)",
+            Filter = "Hình ảnh Logo (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
+        };
+
+        if (dialog.ShowDialog() != true)
         {
             return;
         }
 
+        try
+        {
+            await _branding.SaveCompanyLogoFromFileAsync(dialog.FileName);
+            byte[]? bytes = await _branding.GetCompanyLogoBytesAsync();
+            CompanyLogoPreview = CompanyLogoImageHelper.LoadFromBytesOrDefault(bytes);
+
+            int pushed = IsDirectorNode ? await _collabClient.PushCompanyBrandingToOnlinePeersAsync() : 0;
+            AccountStatusMessage = IsDirectorNode
+                ? $"Đã cập nhật Logo Công ty và đồng bộ tới {pushed} máy trạm đang Online (máy khác sẽ tự kéo khi kết nối)."
+                : "Đã cập nhật Logo Công ty cục bộ.";
+        }
+        catch (Exception ex)
+        {
+            AccountStatusMessage = $"Lỗi cập nhật logo: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task RemoveCompanyLogoAsync()
+    {
+        await _branding.RemoveCompanyLogoAsync();
+        CompanyLogoPreview = CompanyLogoImageHelper.LoadFromBytesOrDefault(null);
+        if (IsDirectorNode)
+        {
+            _ = await _collabClient.PushCompanyBrandingToOnlinePeersAsync();
+        }
+        AccountStatusMessage = "Đã khôi phục Logo mặc định của Ez Company.";
+    }
+
+    [RelayCommand]
+    private void ApplyAccentPreset(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return;
         AccentColorHex = hex;
         PushAppearanceChange();
         AppearanceStatusMessage = $"Đã áp dụng màu chủ đề {AccentColorHex}.";
@@ -171,6 +241,48 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
         AppearanceSettings defaults = _appearance.ResetToDefaults();
         SyncAppearanceFields(defaults);
         AppearanceStatusMessage = "Đã khôi phục cài đặt giao diện mặc định.";
+    }
+
+    [RelayCommand]
+    private async Task ReloadLogsAsync()
+    {
+        IReadOnlyList<string> lines = await _diagnostics.LoadRecentLogLinesAsync(SelectedLogLevel, 250);
+        RecentLogLines.Clear();
+        foreach (string line in lines)
+        {
+            RecentLogLines.Add(line);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportBugReportAsync()
+    {
+        try
+        {
+            string zipPath = await _diagnostics.CreateBugReportZipAsync(BugReportTitle, BugReportDescription);
+            BugReportTitle = string.Empty;
+            BugReportDescription = string.Empty;
+            DiagnosticsStatusMessage = $"Đã đóng gói báo lỗi kèm nhật ký log an toàn tại: {zipPath}";
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{zipPath}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticsStatusMessage = $"Không thể tạo báo lỗi: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task RunAutoScanAndRepairAsync()
+    {
+        IReadOnlyList<DiagnosticRepairItem> items = await _diagnostics.RunAutoScanAndRepairAsync(repair: true);
+        DiagnosticResults.Clear();
+        foreach (DiagnosticRepairItem item in items)
+        {
+            DiagnosticResults.Add(item);
+        }
+
+        DiagnosticsStatusMessage = $"Đã hoàn tất quét & tự sửa lỗi ({items.Count} hạng mục kiểm tra).";
+        await ReloadLogsAsync();
     }
 
     [RelayCommand]

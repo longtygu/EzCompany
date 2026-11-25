@@ -42,7 +42,7 @@ public sealed class DirectorSignatureAuthMiddleware
             return;
         }
 
-        if (IsDeviceSignedRoute(path))
+        if (IsDeviceSignedRoute(path, context.Request.Method))
         {
             await HandleDeviceSignedRequestAsync(context, ed25519, replayCache, audit, appDbFactory, timeProvider)
                 .ConfigureAwait(false);
@@ -236,10 +236,15 @@ public sealed class DirectorSignatureAuthMiddleware
         await _next(context).ConfigureAwait(false);
     }
 
-    private static bool IsDeviceSignedRoute(string path) =>
+    private static bool IsDeviceSignedRoute(string path, string method) =>
         path.StartsWith("/api/v1/account-recovery/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("/api/v1/tasks/", StringComparison.OrdinalIgnoreCase) ||
-        path.StartsWith("/api/v1/peers/", StringComparison.OrdinalIgnoreCase);
+        path.StartsWith("/api/v1/peers/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/api/v1/chat/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/api/v1/timeline/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/api/v1/hr/", StringComparison.OrdinalIgnoreCase) ||
+        (path.Equals("/api/v1/company/branding", StringComparison.OrdinalIgnoreCase) &&
+         HttpMethods.IsGet(method));
 
     private static async Task<byte[]> ReadRequestBodyAsync(HttpContext context)
     {

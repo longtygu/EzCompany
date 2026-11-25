@@ -2,6 +2,20 @@
 
 Tất cả thay đổi đáng chú ý của dự án **Ez Company** được ghi lại tại đây theo chuẩn [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và [Semantic Versioning 2.0.0](https://semver.org/).
 
+## [0.3.0] - 2026-11-26 — Appearance & Backdrop Fix, App Icon, Multi-Role Overview, P2P Chat, Timeline, Diagnostics & HR
+
+### Sửa lỗi (Fixed)
+- **Giao diện & Chất liệu cửa sổ:** Sửa lỗi các thiết lập giao diện không áp dụng ngay và lỗi màu ứng dụng khi đổi chất liệu (`Mica` / `Acrylic` / `None`) trong `WindowTransparencyHelper`, `AppearanceSettingsService` và `App.xaml`.
+- **Hiển thị song ngữ chức danh:** Bổ sung nhãn tiếng Việt cạnh chức danh trên toàn ứng dụng (`Manager (Giám đốc)`, `Accounting (Kế toán)`, `Legal (Pháp chế)`, `HR (Nhân sự)`, `Staff (Nhân viên)`).
+
+### Thêm mới (Added)
+- **Biểu tượng ứng dụng & Logo công ty:** Tạo bộ icon ứng dụng mới (`EzCompany.png` / `EzCompany.ico`) và `CompanyBrandingService` cho phép tải lên/thay đổi logo công ty, đồng bộ hiển thị tại màn hình Đăng nhập và Tổng quan trên tất cả máy.
+- **Tab Tổng quan (`Tổng quan`) & Đa chức vụ:** Đổi tên tab Chào mừng thành `Tổng quan`, gộp trung tâm thiết lập thành tab `Cài đặt` ở dưới cùng, hỗ trợ gán nhiều chức vụ cho một nhân viên (ví dụ Kế toán + Pháp chế) với các tab chức vụ con và công cụ tương ứng.
+- **Chat nội bộ P2P & Ghim việc:** Bổ sung `ChatWorkspaceView` và `ChatService` (chat nhóm & chat riêng), gửi kèm tệp tin lưu trữ cục bộ và đồng bộ P2P giữa các máy, ghim công việc được giao ngay trong nhóm chat.
+- **Lịch trình kế hoạch dùng chung & Giao việc nâng cao:** Thêm `TimelinePlanService` cho phép bất kỳ thành viên nào bổ sung/theo dõi kế hoạch dùng chung trong tab `Tổng quan`; bổ sung đính kèm tệp khi giao việc và thông báo tới người nhận (`TaskAssignedNotificationEvent`).
+- **Chẩn đoán, Báo lỗi & Tự sửa lỗi:** Bổ sung tab xem log, xuất gói báo lỗi `.zip` và công cụ quét tự sửa lỗi mạng/hiệu năng/DB (`AppDiagnosticsAndRepairService`) trong `Cài đặt`.
+- **Quản lý Hồ sơ Nhân sự & Chấm công:** Bổ sung phân hệ `HrAttendanceView` (`HrAttendanceService`) và xuất báo cáo chấm công (`AttendanceExcelExporter`), đồng thời nâng cấp schema SQLite lên v3 (`20261126000001_AddChatTimelineHrAndLogo`).
+
 ## [0.2.0] - 2026-11-25 — UI Customization, Welcome Dashboard, P2P Tasks & Account Recovery
 
 ### Added & Changed

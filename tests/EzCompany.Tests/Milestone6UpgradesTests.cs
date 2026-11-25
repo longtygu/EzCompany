@@ -91,7 +91,7 @@ public sealed class Milestone6UpgradesTests : IAsyncLifetime
         Assert.False(applied.IsDarkMode);
         Assert.Equal("#107C10", applied.AccentColorHex);
         Assert.Equal(20.0, applied.BaseFontSize);
-        Assert.Equal(640.0, applied.CardMaxWidth);
+        Assert.Equal(560.0, applied.CardMaxWidth);
         Assert.Equal(20.0, applied.CardCornerRadius);
         Assert.Equal(8.0, applied.CardPadding);
         Assert.Equal(340.0, applied.SidebarWidth);
@@ -107,7 +107,7 @@ public sealed class Milestone6UpgradesTests : IAsyncLifetime
         Assert.True(reset.IsDarkMode);
         Assert.Equal("#0078D4", reset.AccentColorHex);
         Assert.Equal(1.0, reset.WindowOpacity);
-        Assert.Equal("Mica", reset.BackdropType);
+        Assert.Equal("None", reset.BackdropType);
     }
 
     [Fact]
@@ -310,20 +310,16 @@ public sealed class Milestone6UpgradesTests : IAsyncLifetime
         await using (AppDbContext v1Db = await dbFactory.CreateDbContextAsync())
         {
             await v1Db.GetService<IMigrator>().MigrateAsync("20261123000001_InitialAppSchema");
-            v1Db.CompanyProfiles.Add(new CompanyProfileEntity
-            {
-                CompanyId = Guid.NewGuid(),
-                CompanyName = "Legacy V1 Co",
-                TaxCode = "0301112223",
-                RootPublicKeyBase64 = Convert.ToBase64String(new byte[32]),
-                CompanyEncryptionPublicKeyBase64 = Convert.ToBase64String(new byte[32]),
-                IsDirectorNode = true,
-                IsGenesisCompleted = true,
-                AppSchemaVersion = 1,
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-                UpdatedAtUtc = DateTimeOffset.UtcNow
-            });
-            await v1Db.SaveChangesAsync();
+            long nowTicks = DateTimeOffset.UtcNow.UtcTicks;
+            await v1Db.Database.ExecuteSqlRawAsync(
+                @"INSERT INTO CompanyProfiles (CompanyId, CompanyName, TaxCode, RootPublicKeyBase64, CompanyEncryptionPublicKeyBase64, IsDirectorNode, IsGenesisCompleted, AppSchemaVersion, CreatedAtUtc, UpdatedAtUtc)
+                  VALUES ({0}, {1}, {2}, {3}, {4}, 1, 1, 1, {5}, {5});",
+                Guid.NewGuid(),
+                "Legacy V1 Co",
+                "0301112223",
+                Convert.ToBase64String(new byte[32]),
+                Convert.ToBase64String(new byte[32]),
+                nowTicks);
         }
 
         // Upgrade via SafeMigrationService -> should backup v1, migrate to v2, and bump AppSchemaVersion=2

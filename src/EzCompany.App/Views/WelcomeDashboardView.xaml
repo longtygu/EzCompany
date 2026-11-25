@@ -4,25 +4,38 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              x:Name="RootControl">
     <ScrollViewer Padding="20" VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="{DynamicResource AppCardMaxWidth}" HorizontalAlignment="Stretch">
-            <!-- Top-left Greeting + Date (Solar & Vietnamese Lunar) -->
+        <StackPanel MaxWidth="{DynamicResource AppCardMaxWidth}" HorizontalAlignment="Center">
+            <!-- Top-left Greeting + Company Logo + Date (Solar & Vietnamese Lunar) -->
             <Grid Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+
                 <StackPanel Grid.Column="0" HorizontalAlignment="Left">
-                    <TextBlock Text="{Binding GreetingText}"
-                               FontSize="{DynamicResource AppFontSizeTitle}"
-                               FontWeight="Bold"
-                               Foreground="{DynamicResource AppAccentBrush}" />
-                    <TextBlock Text="{Binding UserRoleAndCompanyText}"
-                               FontSize="{DynamicResource AppFontSizeSmall}"
-                               Opacity="0.8"
-                               Margin="0,4,0,10" />
-                    <Border Padding="{DynamicResource AppCardPadding}"
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Image Source="{Binding CompanyLogoImage}"
+                               Width="60"
+                               Height="60"
+                               Stretch="Uniform"
+                               Margin="0,0,14,0" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding GreetingText}"
+                                       FontSize="{DynamicResource AppFontSizeTitle}"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource AppAccentBrush}" />
+                            <TextBlock Text="{Binding UserRoleAndCompanyText}"
+                                       FontSize="{DynamicResource AppFontSizeSmall}"
+                                       Opacity="0.82"
+                                       Margin="0,3,0,0"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Margin="0,10,0,0"
+                            Padding="{DynamicResource AppCardPadding}"
                             CornerRadius="{DynamicResource AppCardCornerRadius}"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}"
                             BorderThickness="1"
                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
                         <StackPanel>
@@ -34,11 +47,11 @@
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="16,0,0,0">
                     <ui:Button Appearance="Primary"
-                               Content="Làm mới"
+                               Content="Làm mới Tổng quan"
                                Command="{Binding RefreshCommand}"
                                Margin="0,0,0,8" />
                     <ui:Button Appearance="Secondary"
-                               Content="Mở Giao việc &amp; Bàn giao"
+                               Content="Giao việc &amp; Bàn giao"
                                Command="{Binding OpenFullTaskWorkspaceCommand}" />
                 </StackPanel>
             </Grid>
@@ -49,204 +62,341 @@
                        TextWrapping="Wrap"
                        Visibility="{Binding StatusBanner, Converter={StaticResource NotEmptyToVis}}" />
 
-            <!-- Progress Summary -->
-            <Border Padding="{DynamicResource AppCardPadding}"
-                    Margin="0,0,0,16"
-                    CornerRadius="{DynamicResource AppCardCornerRadius}"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Tiến độ hoàn thành các task"
-                                   FontSize="{DynamicResource AppFontSizeHeading}"
-                                   FontWeight="SemiBold" />
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding CompletionPercentText}"
-                                   FontWeight="Bold"
-                                   VerticalAlignment="Center" />
-                    </Grid>
-                    <ProgressBar Minimum="0"
-                                 Maximum="100"
-                                 Height="10"
-                                 Margin="0,10,0,12"
-                                 Value="{Binding CompletionPercent}" />
-                    <UniformGrid Columns="4">
-                        <StackPanel>
-                            <TextBlock Text="Task hôm nay" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.7" />
-                            <TextBlock Text="{Binding SelfTodayCount}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Task được giao (đang mở)" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.7" />
-                            <TextBlock Text="{Binding AssignedOpenCount}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Đã hoàn thành" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.7" />
-                            <TextBlock Text="{Binding CompletedCount}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Quá hạn" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.7" />
-                            <TextBlock Text="{Binding OverdueCount}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
-                        </StackPanel>
-                    </UniformGrid>
-                </StackPanel>
-            </Border>
+            <TabControl>
+                <!-- Tab 1: General Overview + Shared Timeline + Tasks -->
+                <TabItem Header="Tổng quan chung &amp; Lịch trình">
+                    <StackPanel Margin="0,14,0,0">
+                        <!-- Shared Schedule / Timeline Table (Visible & Editable by Everyone) -->
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                Margin="0,0,0,16"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Bảng Lịch trình &amp; Kế hoạch chung (Giám đốc &amp; Nhân viên cùng bổ sung)"
+                                           FontSize="{DynamicResource AppFontSizeHeading}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,10" />
 
-            <!-- 2-Column Main Tasks Area -->
-            <Grid Margin="0,0,0,16">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="130" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0" Text="{Binding NewPlanTitle, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Tên sự kiện / mốc kế hoạch / lịch trình..." />
+                                    <ComboBox Grid.Column="2" ItemsSource="{Binding AvailableTimelineCategories}" SelectedItem="{Binding NewPlanCategory}" />
+                                    <DatePicker Grid.Column="4" SelectedDate="{Binding NewPlanStartDate}" />
+                                    <DatePicker Grid.Column="6" SelectedDate="{Binding NewPlanEndDate}" />
+                                </Grid>
 
-                <!-- Left: Today Self-Created Tasks -->
-                <Border Grid.Column="0"
-                        Padding="{DynamicResource AppCardPadding}"
-                        CornerRadius="{DynamicResource AppCardCornerRadius}"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                    <StackPanel>
-                        <TextBlock Text="Task hôm nay (Tự tạo)"
-                                   FontSize="{DynamicResource AppFontSizeHeading}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,10" />
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0" Text="{Binding NewPlanDescription, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Mô tả chi tiết kế hoạch..." />
+                                    <ui:Button Grid.Column="2" Appearance="Primary" Content="Bổ sung vào Lịch trình" Command="{Binding AddTimelinePlanCommand}" />
+                                </Grid>
 
-                        <Grid Margin="0,0,0,10">
+                                <ItemsControl ItemsSource="{Binding TimelinePlans}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,0,8"
+                                                    Padding="10,8"
+                                                    CornerRadius="8"
+                                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ui:Button Grid.Column="0"
+                                                               Margin="0,0,10,0"
+                                                               Padding="8,4"
+                                                               Content="{Binding Status}"
+                                                               Command="{Binding DataContext.CycleTimelinePlanStatusCommand, ElementName=RootControl}"
+                                                               CommandParameter="{Binding}"
+                                                               ToolTip="Bấm để chuyển Planned -> InProgress -> Done" />
+                                                    <StackPanel Grid.Column="1">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Margin="0,0,8,0" />
+                                                            <TextBlock Text="{Binding Category, StringFormat='[{0}]'}" Foreground="{DynamicResource AppAccentBrush}" FontSize="12" Margin="0,0,8,0" />
+                                                            <TextBlock Text="{Binding CreatedByFullName, StringFormat='bởi {0}'}" FontSize="12" Opacity="0.7" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding Description}" FontSize="12" Opacity="0.82" TextWrapping="Wrap" Margin="0,2,0,0" Visibility="{Binding Description, Converter={StaticResource NotEmptyToVis}}" />
+                                                        <TextBlock FontSize="11" Opacity="0.65" Margin="0,2,0,0">
+                                                            <Run Text="Từ " />
+                                                            <Run Text="{Binding StartDateUtc, StringFormat=dd/MM/yyyy}" />
+                                                            <Run Text=" đến " />
+                                                            <Run Text="{Binding EndDateUtc, StringFormat=dd/MM/yyyy}" />
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <ui:Button Grid.Column="2"
+                                                               Appearance="Transparent"
+                                                               Content="Xóa"
+                                                               Command="{Binding DataContext.DeleteTimelinePlanCommand, ElementName=RootControl}"
+                                                               CommandParameter="{Binding}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Progress Summary -->
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                Margin="0,0,0,16"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Tiến độ hoàn thành các task"
+                                               FontSize="{DynamicResource AppFontSizeHeading}"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding CompletionPercentText}"
+                                               FontWeight="Bold"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                                <ProgressBar Minimum="0"
+                                             Maximum="100"
+                                             Height="10"
+                                             Margin="0,10,0,12"
+                                             Value="{Binding CompletionPercent}" />
+                                <UniformGrid Columns="4">
+                                    <StackPanel>
+                                        <TextBlock Text="Task hôm nay" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.7" />
+                                        <TextBlock Text="{Binding SelfTodayCount}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Task được giao" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.7" />
+                                        <TextBlock Text="{Binding AssignedOpenCount}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Đã hoàn thành" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.7" />
+                                        <TextBlock Text="{Binding CompletedCount}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Quá hạn" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.7" />
+                                        <TextBlock Text="{Binding OverdueCount}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
+                                    </StackPanel>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 2-Column Main Tasks Area -->
+                        <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="95" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <ui:TextBox Grid.Column="0"
-                                        Text="{Binding NewSelfTaskTitle, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="Nhập việc cần làm hôm nay..." />
-                            <ComboBox Grid.Column="2"
-                                      ItemsSource="{Binding AvailablePriorities}"
-                                      SelectedItem="{Binding NewSelfTaskPriority}" />
-                            <ui:Button Grid.Column="4"
-                                       Appearance="Primary"
-                                       Content="Thêm"
-                                       Command="{Binding AddSelfTaskCommand}" />
+
+                            <!-- Left: Today Self-Created Tasks -->
+                            <Border Grid.Column="0"
+                                    Padding="{DynamicResource AppCardPadding}"
+                                    CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                <StackPanel>
+                                    <TextBlock Text="Task hôm nay (Tự tạo)"
+                                               FontSize="{DynamicResource AppFontSizeHeading}"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,10" />
+
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="95" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:TextBox Grid.Column="0"
+                                                    Text="{Binding NewSelfTaskTitle, UpdateSourceTrigger=PropertyChanged}"
+                                                    PlaceholderText="Nhập việc cần làm hôm nay..." />
+                                        <ComboBox Grid.Column="2"
+                                                  ItemsSource="{Binding AvailablePriorities}"
+                                                  SelectedItem="{Binding NewSelfTaskPriority}" />
+                                        <ui:Button Grid.Column="4"
+                                                   Appearance="Primary"
+                                                   Content="Thêm"
+                                                   Command="{Binding AddSelfTaskCommand}" />
+                                    </Grid>
+
+                                    <ItemsControl ItemsSource="{Binding TodaySelfTasks}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,0,8"
+                                                        Padding="10,8"
+                                                        CornerRadius="6"
+                                                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <ui:Button Grid.Column="0"
+                                                                   Margin="0,0,8,0"
+                                                                   Padding="8,4"
+                                                                   Content="{Binding Status}"
+                                                                   Command="{Binding DataContext.ToggleSelfTaskCommand, ElementName=RootControl}"
+                                                                   CommandParameter="{Binding}" />
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding Priority}" FontSize="11" Opacity="0.7" />
+                                                        </StackPanel>
+                                                        <ui:Button Grid.Column="2"
+                                                                   Appearance="Transparent"
+                                                                   Content="Xóa"
+                                                                   Command="{Binding DataContext.DeleteSelfTaskCommand, ElementName=RootControl}"
+                                                                   CommandParameter="{Binding}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Right: Assigned Tasks -->
+                            <Border Grid.Column="2"
+                                    Padding="{DynamicResource AppCardPadding}"
+                                    CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                <StackPanel>
+                                    <TextBlock Text="Task được giao"
+                                               FontSize="{DynamicResource AppFontSizeHeading}"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,10" />
+
+                                    <ListBox ItemsSource="{Binding AssignedToMeTasks}"
+                                             SelectedItem="{Binding SelectedAssignedTask}"
+                                             MaxHeight="200"
+                                             Margin="0,0,0,10">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="4,4">
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                        <TextBlock Text="Giao bởi: " FontSize="11" Opacity="0.7" />
+                                                        <TextBlock Text="{Binding AssignerFullName}" FontSize="11" FontWeight="SemiBold" Margin="0,0,10,0" />
+                                                        <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.85" Margin="0,0,10,0" />
+                                                        <TextBlock Text="{Binding Priority}" FontSize="11" Opacity="0.7" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <ui:TextBox Text="{Binding QuickHandoverNotes, UpdateSourceTrigger=PropertyChanged}"
+                                                PlaceholderText="Ghi chú kết quả bàn giao nhanh cho task đang chọn..."
+                                                Margin="0,0,0,8" />
+                                    <WrapPanel>
+                                        <ui:Button Content="Bắt đầu làm"
+                                                   Command="{Binding StartSelectedAssignedTaskCommand}"
+                                                   Margin="0,0,8,6" />
+                                        <ui:Button Appearance="Primary"
+                                                   Content="Bàn giao nhanh"
+                                                   Command="{Binding SubmitQuickHandoverCommand}"
+                                                   Margin="0,0,8,6" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
                         </Grid>
 
-                        <ItemsControl ItemsSource="{Binding TodaySelfTasks}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,0,8"
-                                            Padding="10,8"
-                                            CornerRadius="6"
-                                            Background="{DynamicResource ControlFillColorDefaultBrush}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <ui:Button Grid.Column="0"
-                                                       Margin="0,0,8,0"
-                                                       Padding="8,4"
-                                                       Content="{Binding Status}"
-                                                       Command="{Binding DataContext.ToggleSelfTaskCommand, ElementName=RootControl}"
-                                                       CommandParameter="{Binding}"
-                                                       ToolTip="Bấm để chuyển Hoàn thành / Mở lại" />
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                                <TextBlock Text="{Binding Priority}" FontSize="11" Opacity="0.7" />
-                                            </StackPanel>
-                                            <ui:Button Grid.Column="2"
-                                                       Appearance="Transparent"
-                                                       Content="Xóa"
-                                                       Command="{Binding DataContext.DeleteSelfTaskCommand, ElementName=RootControl}"
-                                                       CommandParameter="{Binding}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <!-- Completed Tasks History -->
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Lịch sử hoàn thành các task"
+                                           FontSize="{DynamicResource AppFontSizeHeading}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,10" />
+                                <DataGrid ItemsSource="{Binding CompletedTasksHistory}"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          MaxHeight="210">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Tiêu đề" Binding="{Binding Title}" Width="*" />
+                                        <DataGridTextColumn Header="Loại" Binding="{Binding TaskKind}" Width="85" />
+                                        <DataGridTextColumn Header="Người giao" Binding="{Binding AssignerFullName}" Width="140" />
+                                        <DataGridTextColumn Header="Người làm" Binding="{Binding AssigneeFullName}" Width="140" />
+                                        <DataGridTextColumn Header="Kết quả bàn giao" Binding="{Binding HandoverNotes}" Width="180" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </Border>
+                </TabItem>
 
-                <!-- Right: Assigned Tasks -->
-                <Border Grid.Column="2"
-                        Padding="{DynamicResource AppCardPadding}"
-                        CornerRadius="{DynamicResource AppCardCornerRadius}"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                    <StackPanel>
-                        <TextBlock Text="Task được giao"
-                                   FontSize="{DynamicResource AppFontSizeHeading}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,10" />
-
-                        <ListBox ItemsSource="{Binding AssignedToMeTasks}"
-                                 SelectedItem="{Binding SelectedAssignedTask}"
-                                 MaxHeight="210"
-                                 Margin="0,0,0,10">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Margin="4,4">
-                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                            <TextBlock Text="Người giao: " FontSize="11" Opacity="0.7" />
-                                            <TextBlock Text="{Binding AssignerFullName}" FontSize="11" FontWeight="SemiBold" Margin="0,0,10,0" />
-                                            <TextBlock Text="{Binding Status}" FontSize="11" Opacity="0.85" Margin="0,0,10,0" />
-                                            <TextBlock Text="{Binding Priority}" FontSize="11" Opacity="0.7" />
-                                        </StackPanel>
+                <!-- Tab 2: Dynamic Multi-Role Sub-Tabs (Accounting, Legal, Manager, HR, Staff) -->
+                <TabItem Header="Chào mừng &amp; Công cụ theo Chức vụ">
+                    <TabControl ItemsSource="{Binding RoleSubTabs}" Margin="0,12,0,0">
+                        <TabControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding TabHeader}" FontWeight="SemiBold" />
+                            </DataTemplate>
+                        </TabControl.ItemTemplate>
+                        <TabControl.ContentTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,12,0,0"
+                                        Padding="{DynamicResource AppCardPadding}"
+                                        CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Headline}"
+                                                   FontSize="{DynamicResource AppFontSizeHeading}"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppAccentBrush}" />
+                                        <TextBlock Text="{Binding MetricsSummary}"
+                                                   Margin="0,8,0,16"
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.9" />
+                                        <WrapPanel>
+                                            <ui:Button Appearance="Primary"
+                                                       Content="{Binding ToolButtonText}"
+                                                       Command="{Binding DataContext.NavigateToKeyCommand, ElementName=RootControl}"
+                                                       CommandParameter="{Binding TargetNavKey}"
+                                                       Margin="0,0,10,6" />
+                                            <ui:Button Appearance="Secondary"
+                                                       Content="{Binding SecondaryButtonText}"
+                                                       Command="{Binding DataContext.NavigateToKeyCommand, ElementName=RootControl}"
+                                                       CommandParameter="{Binding SecondaryNavKey}"
+                                                       Visibility="{Binding HasSecondaryButton, Converter={StaticResource BoolToVis}}"
+                                                       Margin="0,0,0,6" />
+                                        </WrapPanel>
                                     </StackPanel>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-
-                        <ui:TextBox Text="{Binding QuickHandoverNotes, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="Ghi chú kết quả bàn giao nhanh cho task đang chọn..."
-                                    Margin="0,0,0,8" />
-                        <WrapPanel>
-                            <ui:Button Content="Bắt đầu làm"
-                                       Command="{Binding StartSelectedAssignedTaskCommand}"
-                                       Margin="0,0,8,6" />
-                            <ui:Button Appearance="Primary"
-                                       Content="Bàn giao nhanh"
-                                       Command="{Binding SubmitQuickHandoverCommand}"
-                                       Margin="0,0,8,6" />
-                        </WrapPanel>
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <!-- Completed Tasks History -->
-            <Border Padding="{DynamicResource AppCardPadding}"
-                    CornerRadius="{DynamicResource AppCardCornerRadius}"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                <StackPanel>
-                    <TextBlock Text="Lịch sử hoàn thành các task"
-                               FontSize="{DynamicResource AppFontSizeHeading}"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,10" />
-                    <DataGrid ItemsSource="{Binding CompletedTasksHistory}"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              MaxHeight="230">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Tiêu đề" Binding="{Binding Title}" Width="*" />
-                            <DataGridTextColumn Header="Loại" Binding="{Binding TaskKind}" Width="85" />
-                            <DataGridTextColumn Header="Người giao" Binding="{Binding AssignerFullName}" Width="140" />
-                            <DataGridTextColumn Header="Người làm" Binding="{Binding AssigneeFullName}" Width="140" />
-                            <DataGridTextColumn Header="Kết quả bàn giao" Binding="{Binding HandoverNotes}" Width="180" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </StackPanel>
-            </Border>
+                                </Border>
+                            </DataTemplate>
+                        </TabControl.ContentTemplate>
+                    </TabControl>
+                </TabItem>
+            </TabControl>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

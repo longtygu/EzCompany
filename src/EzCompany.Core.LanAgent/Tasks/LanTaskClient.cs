@@ -185,6 +185,17 @@ public sealed class LanTaskClient
             }
         }
 
+        string? assignmentFileBase64 = null;
+        if (!string.IsNullOrWhiteSpace(task.AssignmentVaultPath))
+        {
+            string fullAssignPath = Path.GetFullPath(Path.Combine(_paths.VaultDirectory, task.AssignmentVaultPath.Replace('/', Path.DirectorySeparatorChar)));
+            if (File.Exists(fullAssignPath))
+            {
+                byte[] assignBytes = await File.ReadAllBytesAsync(fullAssignPath, ct).ConfigureAwait(false);
+                assignmentFileBase64 = Convert.ToBase64String(assignBytes);
+            }
+        }
+
         try
         {
             var payload = new TaskSyncPayloadDto(
@@ -215,7 +226,10 @@ public sealed class LanTaskClient
                 ReviewNotes: task.ReviewNotes,
                 SyncAction: syncAction,
                 HistoryNote: historyNote,
-                SenderSignedPolicyJson: senderPolicyJson);
+                SenderSignedPolicyJson: senderPolicyJson,
+                AssignmentFileName: task.AssignmentFileName,
+                AssignmentFileSha256: task.AssignmentFileSha256,
+                AssignmentFileBase64: assignmentFileBase64);
 
             string baseUrl = NormalizeBaseUrl(targetEndpoint);
             byte[] bodyBytes = JsonSerializer.SerializeToUtf8Bytes(payload);

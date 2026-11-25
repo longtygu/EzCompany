@@ -87,12 +87,23 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="260" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="10" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <ui:TextBox Grid.Column="0"
                                     Text="{Binding NewTaskDescription, UpdateSourceTrigger=PropertyChanged}"
                                     PlaceholderText="Mô tả chi tiết yêu cầu công việc..." />
-                        <ui:Button Grid.Column="2"
+                        <ui:TextBox Grid.Column="2"
+                                    IsReadOnly="True"
+                                    Text="{Binding NewTaskAttachmentPath}"
+                                    PlaceholderText="Tệp giao việc (tùy chọn)..." />
+                        <ui:Button Grid.Column="4"
+                                   Content="Đính kèm..."
+                                   Command="{Binding BrowseNewTaskAttachmentCommand}" />
+                        <ui:Button Grid.Column="6"
                                    Appearance="Primary"
                                    Content="Giao việc ngay"
                                    Command="{Binding AssignTaskCommand}" />
@@ -112,10 +123,11 @@
                                   Margin="0,0,0,12">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Tiêu đề" Binding="{Binding Title}" Width="*" />
-                                <DataGridTextColumn Header="Người giao" Binding="{Binding AssignerFullName}" Width="140" />
-                                <DataGridTextColumn Header="Ưu tiên" Binding="{Binding Priority}" Width="80" />
-                                <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="115" />
-                                <DataGridTextColumn Header="Ghi chú nghiệm thu" Binding="{Binding ReviewNotes}" Width="160" />
+                                <DataGridTextColumn Header="Người giao" Binding="{Binding AssignerFullName}" Width="130" />
+                                <DataGridTextColumn Header="Ưu tiên" Binding="{Binding Priority}" Width="75" />
+                                <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="105" />
+                                <DataGridTextColumn Header="Tệp giao việc" Binding="{Binding AssignmentFileName}" Width="125" />
+                                <DataGridTextColumn Header="Ghi chú nghiệm thu" Binding="{Binding ReviewNotes}" Width="140" />
                             </DataGrid.Columns>
                         </DataGrid>
 
@@ -142,6 +154,7 @@
                                     <ui:Button Grid.Column="2" Content="Chọn tệp..." Command="{Binding BrowseHandoverAttachmentCommand}" />
                                 </Grid>
                                 <WrapPanel>
+                                    <ui:Button Content="Mở tệp giao việc" Command="{Binding OpenSelectedInboxAssignmentAttachmentCommand}" Margin="0,0,8,0" />
                                     <ui:Button Content="Bắt đầu thực hiện" Command="{Binding StartInboxTaskCommand}" Margin="0,0,8,0" />
                                     <ui:Button Appearance="Primary" Content="Gửi bàn giao kết quả" Command="{Binding SubmitHandoverCommand}" />
                                 </WrapPanel>

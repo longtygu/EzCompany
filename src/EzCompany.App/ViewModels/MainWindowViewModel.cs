@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EzCompany.App.Services;
@@ -17,6 +18,7 @@ namespace EzCompany.App.ViewModels;
 public sealed partial class MainWindowViewModel : ObservableObject
 {
     private readonly GenesisBootstrapService _bootstrap;
+    private readonly CompanyBrandingService _branding;
     private readonly ILocalStoragePaths _paths;
     private readonly ILanDiscoveryService _discovery;
     private readonly LanPairingClient _pairingClient;
@@ -26,6 +28,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public MainWindowViewModel(
         GenesisBootstrapService bootstrap,
+        CompanyBrandingService branding,
         ILocalStoragePaths paths,
         ILanDiscoveryService discovery,
         LanPairingClient pairingClient,
@@ -34,6 +37,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ILogger<MainWindowViewModel> logger)
     {
         _bootstrap = bootstrap;
+        _branding = branding;
         _paths = paths;
         _discovery = discovery;
         _pairingClient = pairingClient;
@@ -63,6 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _companyTaxCode = string.Empty;
     [ObservableProperty] private string _nodeRoleBadge = string.Empty;
     [ObservableProperty] private string _loginUsername = string.Empty;
+    [ObservableProperty] private BitmapImage? _companyLogoImage;
 
     // Initialized Employee Reset via LAN
     [ObservableProperty] private string _employeeResetManualEndpoint = string.Empty;
@@ -102,15 +107,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
         try
         {
             CompanyProfileEntity? company = await _bootstrap.GetCompanyProfileAsync();
+            CompanyLogoImage = CompanyLogoImageHelper.LoadFromBytesOrDefault(await _branding.GetCompanyLogoBytesAsync());
             if (company is { IsGenesisCompleted: true })
             {
                 IsInitialized = true;
                 IsDirectorNode = company.IsDirectorNode;
                 CompanyDisplayName = company.CompanyName;
                 CompanyTaxCode = $"MST: {company.TaxCode}";
-                NodeRoleBadge = company.IsDirectorNode ? "Nút Giám đốc (Director)" : "Nút Nhân viên (Workstation)";
 
                 LocalUserEntity? primaryUser = await _bootstrap.GetPrimaryLocalUserAsync();
+                NodeRoleBadge = primaryUser is not null
+                    ? CompanyRoles.FormatRolesBilingual(primaryUser.Role)
+                    : (company.IsDirectorNode ? CompanyRoles.GetBilingualLabel(CompanyRoles.Director) : CompanyRoles.GetBilingualLabel(CompanyRoles.Staff));
                 if (primaryUser is not null)
                 {
                     if (string.IsNullOrWhiteSpace(LoginUsername))

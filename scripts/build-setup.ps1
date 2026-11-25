@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.2.0",
+    [string]$Version = "0.3.0",
     [switch]$SkipTests
 )
 
@@ -72,6 +72,7 @@ try {
         --mainExe EzCompany.App.exe `
         --outputDir $releasesDir `
         --packTitle "Ez Company" `
+        --icon (Join-Path $RepoRoot "src\EzCompany.App\Assets\EzCompany.ico") `
         --runtime win-x64 `
         --channel win
     if ($LASTEXITCODE -ne 0) { throw "vpk pack failed with exit code $LASTEXITCODE." }

@@ -4,207 +4,307 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              x:Name="SettingsRoot">
     <ScrollViewer Padding="20" VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="{DynamicResource AppCardMaxWidth}" HorizontalAlignment="Stretch">
-            <TextBlock Text="Tài khoản, Đổi mật khẩu &amp; Tùy chỉnh Giao diện"
+        <StackPanel MaxWidth="{DynamicResource AppCardMaxWidth}" HorizontalAlignment="Center">
+            <TextBlock Text="Cài đặt Hệ thống (Giao diện, Tài khoản, Cập nhật &amp; Chẩn đoán Lỗi)"
                        FontSize="{DynamicResource AppFontSizeTitle}"
                        FontWeight="Bold"
                        Margin="0,0,0,14" />
 
-            <!-- Section 1: Account Credentials Change -->
-            <Border Padding="{DynamicResource AppCardPadding}"
-                    Margin="0,0,0,16"
-                    CornerRadius="{DynamicResource AppCardCornerRadius}"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                <StackPanel>
-                    <TextBlock Text="1. Đổi Tên hiển thị, Tên đăng nhập &amp; Mật khẩu"
-                               FontSize="{DynamicResource AppFontSizeHeading}"
-                               FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding RoleDisplay}"
-                               FontSize="{DynamicResource AppFontSizeSmall}"
-                               Opacity="0.75"
-                               Margin="0,2,0,12" />
+            <TabControl>
+                <!-- Tab 1: Appearance -->
+                <TabItem Header="1. Giao diện">
+                    <StackPanel Margin="0,14,0,0">
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Tùy chỉnh hiển thị (Áp dụng trực tiếp tức thì)"
+                                               FontSize="{DynamicResource AppFontSizeHeading}"
+                                               FontWeight="SemiBold" />
+                                    <ui:Button Grid.Column="1" Content="Khôi phục mặc định" Command="{Binding ResetAppearanceCommand}" />
+                                </Grid>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="12" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="Họ và tên hiển thị" Margin="0,0,0,4" />
-                            <ui:TextBox Text="{Binding FullName, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="Tên đăng nhập" Margin="0,0,0,4" />
-                            <ui:TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                    </Grid>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
 
-                    <Grid Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="12" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="12" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="Mật khẩu hiện tại (*)" Margin="0,0,0,4" />
-                            <ui:PasswordBox x:Name="CurrentPasswordBox" PlaceholderText="Bắt buộc nhập..." />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="Mật khẩu mới (để trống nếu không đổi)" Margin="0,0,0,4" />
-                            <ui:PasswordBox x:Name="NewPasswordBox" PlaceholderText="Tối thiểu 6 ký tự..." />
-                        </StackPanel>
-                        <StackPanel Grid.Column="4">
-                            <TextBlock Text="Nhập lại mật khẩu mới" Margin="0,0,0,4" />
-                            <ui:PasswordBox x:Name="ConfirmPasswordBox" PlaceholderText="Xác nhận mật khẩu mới..." />
-                        </StackPanel>
-                    </Grid>
+                                    <StackPanel Grid.Column="0">
+                                        <CheckBox Content="Chế độ Nền tối (Dark Mode)" IsChecked="{Binding IsDarkMode}" Margin="0,0,0,10" />
+                                        <TextBlock Text="Chất liệu nền cửa sổ (Material)" Margin="0,0,0,4" />
+                                        <ComboBox ItemsSource="{Binding AvailableBackdrops}" SelectedItem="{Binding BackdropType}" />
+                                        <TextBlock Text="Lưu ý: Khi đặt độ trong suốt &lt; 100%, hệ thống tự dùng lớp phủ trong suốt an toàn để không sai màu nền."
+                                                   FontSize="11"
+                                                   Opacity="0.65"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,6,0,0" />
+                                    </StackPanel>
 
-                    <TextBlock Text="{Binding AccountStatusMessage}"
-                               Margin="0,10,0,0"
-                               FontWeight="SemiBold"
-                               TextWrapping="Wrap"
-                               Visibility="{Binding AccountStatusMessage, Converter={StaticResource NotEmptyToVis}}" />
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Màu chủ đề (Accent Color)" Margin="0,0,0,6" />
+                                        <ItemsControl ItemsSource="{Binding AccentPresets}" Margin="0,0,0,8">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Width="30"
+                                                            Height="30"
+                                                            Margin="0,0,6,6"
+                                                            ToolTip="{Binding Name}"
+                                                            Background="{Binding Hex}"
+                                                            Command="{Binding DataContext.ApplyAccentPresetCommand, ElementName=SettingsRoot}"
+                                                            CommandParameter="{Binding Hex}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ui:TextBox Grid.Column="0" Text="{Binding AccentColorHex, UpdateSourceTrigger=PropertyChanged}" />
+                                            <ui:Button Grid.Column="2" Content="Áp dụng màu" Command="{Binding ApplyCustomAccentCommand}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
 
-                    <ui:Button Margin="0,12,0,0"
-                               Appearance="Primary"
-                               Content="Lưu thông tin &amp; Đổi mật khẩu"
-                               Click="SaveCredentialsButton_Click" />
-                </StackPanel>
-            </Border>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{Binding BaseFontSize, StringFormat='Cỡ chữ giao diện: {0:F1} pt'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="11" Maximum="20" TickFrequency="0.5" IsSnapToTickEnabled="True" Value="{Binding BaseFontSize}" Margin="0,0,0,8" />
 
-            <!-- Section 2: UI Appearance Settings -->
-            <Border Padding="{DynamicResource AppCardPadding}"
-                    Margin="0,0,0,16"
-                    CornerRadius="{DynamicResource AppCardCornerRadius}"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                <StackPanel>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="2. Cài đặt Giao diện (Cỡ chữ, Độ rộng thẻ, Màu chủ đề, Độ trong suốt)"
-                                   FontSize="{DynamicResource AppFontSizeHeading}"
-                                   FontWeight="SemiBold" />
-                        <ui:Button Grid.Column="1"
-                                   Content="Khôi phục mặc định"
-                                   Command="{Binding ResetAppearanceCommand}" />
-                    </Grid>
+                                        <TextBlock Text="{Binding CardMaxWidth, StringFormat='Độ rộng tối đa các thẻ: {0:F0} px'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="560" Maximum="1600" TickFrequency="20" IsSnapToTickEnabled="True" Value="{Binding CardMaxWidth}" Margin="0,0,0,8" />
 
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding SidebarWidth, StringFormat='Độ rộng thanh điều hướng: {0:F0} px'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="210" Maximum="340" TickFrequency="10" IsSnapToTickEnabled="True" Value="{Binding SidebarWidth}" />
+                                    </StackPanel>
 
-                        <StackPanel Grid.Column="0">
-                            <CheckBox Content="Chế độ Nền tối (Dark Mode)"
-                                      IsChecked="{Binding IsDarkMode}"
-                                      Margin="0,0,0,10" />
-                            <TextBlock Text="Hiệu ứng nền cửa sổ (Window Backdrop)" Margin="0,0,0,4" />
-                            <ComboBox ItemsSource="{Binding AvailableBackdrops}"
-                                      SelectedItem="{Binding BackdropType}" />
-                        </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="{Binding CardCornerRadius, StringFormat='Bo góc các thẻ: {0:F0} px'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="4" Maximum="20" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding CardCornerRadius}" Margin="0,0,0,8" />
 
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="Màu chủ đề (Accent Color)" Margin="0,0,0,6" />
-                            <ItemsControl ItemsSource="{Binding AccentPresets}" Margin="0,0,0,8">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Width="30"
-                                                Height="30"
-                                                Margin="0,0,6,6"
-                                                ToolTip="{Binding Name}"
-                                                Background="{Binding Hex}"
-                                                Command="{Binding DataContext.ApplyAccentPresetCommand, ElementName=SettingsRoot}"
-                                                CommandParameter="{Binding Hex}" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                        <TextBlock Text="{Binding CardPadding, StringFormat='Khoảng đệm bên trong thẻ: {0:F0} px'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="8" Maximum="28" TickFrequency="2" IsSnapToTickEnabled="True" Value="{Binding CardPadding}" Margin="0,0,0,8" />
 
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="8" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <ui:TextBox Grid.Column="0"
-                                            Text="{Binding AccentColorHex, UpdateSourceTrigger=PropertyChanged}"
-                                            PlaceholderText="#0078D4" />
-                                <ui:Button Grid.Column="2"
-                                           Content="Áp dụng mã màu"
-                                           Command="{Binding ApplyCustomAccentCommand}" />
-                            </Grid>
-                        </StackPanel>
-                    </Grid>
+                                        <TextBlock Text="{Binding WindowOpacity, StringFormat='Độ trong suốt cửa sổ: {0:P0}'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="0.70" Maximum="1.00" TickFrequency="0.02" IsSnapToTickEnabled="True" Value="{Binding WindowOpacity}" />
+                                    </StackPanel>
+                                </Grid>
 
-                    <!-- Sliders -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="{Binding BaseFontSize, StringFormat='Cỡ chữ giao diện: {0:F1} pt'}" Margin="0,4,0,2" />
-                            <Slider Minimum="11" Maximum="20" TickFrequency="0.5" IsSnapToTickEnabled="True" Value="{Binding BaseFontSize}" Margin="0,0,0,8" />
+                                <TextBlock Text="{Binding AppearanceStatusMessage}" Margin="0,8,0,0" Opacity="0.85" Visibility="{Binding AppearanceStatusMessage, Converter={StaticResource NotEmptyToVis}}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </TabItem>
 
-                            <TextBlock Text="{Binding CardMaxWidth, StringFormat='Độ rộng tối đa các thẻ: {0:F0} px'}" Margin="0,4,0,2" />
-                            <Slider Minimum="640" Maximum="1600" TickFrequency="20" IsSnapToTickEnabled="True" Value="{Binding CardMaxWidth}" Margin="0,0,0,8" />
+                <!-- Tab 2: Account Credentials & Company Logo -->
+                <TabItem Header="2. Tài khoản &amp; Logo Công ty">
+                    <StackPanel Margin="0,14,0,0">
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                Margin="0,0,0,16"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Logo Doanh nghiệp (Đồng bộ tới màn hình Đăng nhập &amp; Tổng quan của tất cả máy)"
+                                           FontSize="{DynamicResource AppFontSizeHeading}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,10" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Padding="6" CornerRadius="8" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" Margin="0,0,16,0">
+                                        <Image Source="{Binding CompanyLogoPreview}" Width="80" Height="80" Stretch="Uniform" />
+                                    </Border>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <WrapPanel Margin="0,0,0,6">
+                                            <ui:Button Appearance="Primary" Content="Tải lên / Đổi Logo Công ty" Command="{Binding UploadCompanyLogoCommand}" Margin="0,0,8,0" />
+                                            <ui:Button Content="Khôi phục Logo mặc định" Command="{Binding RemoveCompanyLogoCommand}" />
+                                        </WrapPanel>
+                                        <TextBlock Text="Khuyến nghị ảnh PNG nền trong suốt (tối đa 2 MB)." FontSize="12" Opacity="0.7" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
-                            <TextBlock Text="{Binding SidebarWidth, StringFormat='Độ rộng thanh điều hướng: {0:F0} px'}" Margin="0,4,0,2" />
-                            <Slider Minimum="210" Maximum="340" TickFrequency="10" IsSnapToTickEnabled="True" Value="{Binding SidebarWidth}" />
-                        </StackPanel>
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Đổi Tên hiển thị, Tên đăng nhập &amp; Mật khẩu cục bộ"
+                                           FontSize="{DynamicResource AppFontSizeHeading}"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding RoleDisplay}" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.75" Margin="0,2,0,12" />
 
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="{Binding CardCornerRadius, StringFormat='Bo góc các thẻ: {0:F0} px'}" Margin="0,4,0,2" />
-                            <Slider Minimum="4" Maximum="20" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding CardCornerRadius}" Margin="0,0,0,8" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Họ và tên hiển thị" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding FullName, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Tên đăng nhập" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </Grid>
 
-                            <TextBlock Text="{Binding CardPadding, StringFormat='Khoảng đệm bên trong thẻ: {0:F0} px'}" Margin="0,4,0,2" />
-                            <Slider Minimum="8" Maximum="28" TickFrequency="2" IsSnapToTickEnabled="True" Value="{Binding CardPadding}" Margin="0,0,0,8" />
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Mật khẩu hiện tại (*)" Margin="0,0,0,4" />
+                                        <ui:PasswordBox x:Name="CurrentPasswordBox" PlaceholderText="Bắt buộc nhập..." />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Mật khẩu mới (nếu đổi)" Margin="0,0,0,4" />
+                                        <ui:PasswordBox x:Name="NewPasswordBox" PlaceholderText="Tối thiểu 6 ký tự..." />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4">
+                                        <TextBlock Text="Nhập lại mật khẩu mới" Margin="0,0,0,4" />
+                                        <ui:PasswordBox x:Name="ConfirmPasswordBox" PlaceholderText="Xác nhận mật khẩu..." />
+                                    </StackPanel>
+                                </Grid>
 
-                            <TextBlock Text="{Binding WindowOpacity, StringFormat='Độ mờ / trong suốt cửa sổ: {0:P0}'}" Margin="0,4,0,2" />
-                            <Slider Minimum="0.70" Maximum="1.00" TickFrequency="0.02" IsSnapToTickEnabled="True" Value="{Binding WindowOpacity}" />
-                        </StackPanel>
-                    </Grid>
+                                <TextBlock Text="{Binding AccountStatusMessage}" Margin="0,10,0,0" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="{Binding AccountStatusMessage, Converter={StaticResource NotEmptyToVis}}" />
+                                <ui:Button Margin="0,12,0,0" Appearance="Primary" Content="Lưu thông tin &amp; Đổi mật khẩu" Click="SaveCredentialsButton_Click" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </TabItem>
 
-                    <TextBlock Text="{Binding AppearanceStatusMessage}"
-                               Margin="0,8,0,0"
-                               Opacity="0.8"
-                               Visibility="{Binding AppearanceStatusMessage, Converter={StaticResource NotEmptyToVis}}" />
-                </StackPanel>
-            </Border>
+                <!-- Tab 3: Updates & Backups -->
+                <TabItem Header="3. Cập nhật &amp; Sao lưu CSDL">
+                    <StackPanel Margin="0,14,0,0">
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                Margin="0,0,0,16"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding UpdatesVm.VersionText}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding UpdatesVm.RepoUrlText}" Opacity="0.7" Margin="0,4,0,8" />
+                                <TextBlock Text="{Binding UpdatesVm.PolicyGateText}" Margin="0,0,0,10" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding UpdatesVm.UpdateStatus}" Margin="0,0,0,12" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <WrapPanel>
+                                    <ui:Button Appearance="Primary" Content="Kiểm tra cập nhật" Command="{Binding UpdatesVm.CheckForUpdateCommand}" Margin="0,0,10,0" />
+                                    <ui:Button Content="Tải &amp; Cài đặt bản cập nhật" Command="{Binding UpdatesVm.InstallUpdateCommand}" IsEnabled="{Binding UpdatesVm.CanInstallUpdate}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
 
-            <!-- Section 3: Station License & Logs -->
-            <Border Padding="{DynamicResource AppCardPadding}"
-                    CornerRadius="{DynamicResource AppCardCornerRadius}"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                <StackPanel>
-                    <TextBlock Text="3. Trạng thái Giấy phép, Mạng LAN &amp; Nhật ký Cục bộ"
-                               FontSize="{DynamicResource AppFontSizeHeading}"
-                               FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding PolicySummary}" Margin="0,8,0,0" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding StorageSummary}" Margin="0,4,0,0" Opacity="0.75" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding LanSummary}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding LogSummary}" Margin="0,4,0,10" Opacity="0.75" TextWrapping="Wrap" />
-                    <ui:Button Content="Mở thư mục Logs" Command="{Binding OpenLogsFolderCommand}" />
-                </StackPanel>
-            </Border>
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Thông tin Giấy phép &amp; Sao lưu trước Migration" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <TextBlock Text="{Binding PolicySummary}" Margin="0,0,0,4" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding StorageSummary}" Margin="0,0,0,4" Opacity="0.75" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding LanSummary}" Margin="0,0,0,10" TextWrapping="Wrap" />
+                                <ListBox ItemsSource="{Binding UpdatesVm.PreMigrationBackups}" Height="150" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </TabItem>
+
+                <!-- Tab 4: Bug Report, Log Viewer & Self-Heal -->
+                <TabItem Header="4. Báo lỗi, Nhật ký &amp; Tự sửa lỗi">
+                    <StackPanel Margin="0,14,0,0">
+                        <!-- Self-Heal Scanner -->
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                Margin="0,0,0,16"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Quét Chẩn đoán &amp; Tự sửa lỗi Ứng dụng" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="SemiBold" />
+                                        <TextBlock Text="Kiểm tra &amp; sửa tự động mạng LAN P2P, hàng đợi đồng bộ, CSDL SQLite WAL, dọn RAM/tệp tạm và ClockGuard." FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="1" Appearance="Primary" Content="Quét &amp; Tự sửa lỗi ngay" Command="{Binding RunAutoScanAndRepairCommand}" />
+                                </Grid>
+
+                                <TextBlock Text="{Binding DiagnosticsStatusMessage}" Margin="0,4,0,8" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="{Binding DiagnosticsStatusMessage, Converter={StaticResource NotEmptyToVis}}" />
+
+                                <DataGrid ItemsSource="{Binding DiagnosticResults}" AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="165">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Hạng mục" Binding="{Binding Category}" Width="210" />
+                                        <DataGridTextColumn Header="Kết quả" Binding="{Binding Status}" Width="90" />
+                                        <DataGridTextColumn Header="Chi tiết chẩn đoán" Binding="{Binding Details}" Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Bug Report Bundler -->
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                Margin="0,0,0,16"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Báo lỗi &amp; Đóng gói Nhật ký phân tích (.zip)" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <ui:TextBox Text="{Binding BugReportTitle, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Tiêu đề lỗi gặp phải..." Margin="0,0,0,8" />
+                                <ui:TextBox Text="{Binding BugReportDescription, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Mô tả chi tiết các bước tái hiện lỗi..." Margin="0,0,0,10" />
+                                <WrapPanel>
+                                    <ui:Button Appearance="Primary" Content="Tạo gói Báo lỗi &amp; Log (.zip)" Command="{Binding ExportBugReportCommand}" Margin="0,0,10,0" />
+                                    <ui:Button Content="Mở thư mục Logs" Command="{Binding OpenLogsFolderCommand}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Live Log History -->
+                        <Border Padding="{DynamicResource AppCardPadding}"
+                                CornerRadius="{DynamicResource AppCardCornerRadius}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Lịch sử Log Runtime (gần nhất)" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding SelectedLogLevel}" />
+                                    <ui:Button Grid.Column="3" Content="Tải lại Log" Command="{Binding ReloadLogsCommand}" />
+                                </Grid>
+                                <ListBox ItemsSource="{Binding RecentLogLines}" Height="210" FontFamily="Consolas" FontSize="11.5" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </TabItem>
+            </TabControl>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

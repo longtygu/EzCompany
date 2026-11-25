@@ -61,6 +61,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid>("CompanyId").ValueGeneratedOnAdd().HasColumnType("TEXT");
             b.Property<int>("AppSchemaVersion").HasColumnType("INTEGER");
             b.Property<string>("CompanyEncryptionPublicKeyBase64").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("CompanyLogoBase64").HasColumnType("TEXT");
+            b.Property<long?>("CompanyLogoUpdatedAtUtc").HasColumnType("INTEGER");
             b.Property<string>("CompanyName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
             b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
             b.Property<bool>("IsDirectorNode").HasColumnType("INTEGER");
@@ -192,6 +194,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("AssignerMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
             b.Property<string>("AssignerRole").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
             b.Property<string>("AssignerUsername").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("AssignmentFileName").HasColumnType("TEXT");
+            b.Property<string>("AssignmentFileSha256").HasColumnType("TEXT");
+            b.Property<string>("AssignmentVaultPath").HasColumnType("TEXT");
             b.Property<Guid>("CompanyId").HasColumnType("TEXT");
             b.Property<long?>("CompletedAtUtc").HasColumnType("INTEGER");
             b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
@@ -233,6 +238,113 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("TaskId");
             b.HasIndex("TimestampUtc");
             b.ToTable("WorkTaskHistories");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.ChatConversationEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<string>("ConversationType").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("MemberMachineIdsJson").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("MemberNamesJson").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Name").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<Guid?>("PinnedTaskId").HasColumnType("TEXT");
+            b.Property<string>("PinnedTaskSummary").HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("UpdatedAtUtc");
+            b.ToTable("ChatConversations");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.ChatMessageEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<string>("AttachmentFileName").HasColumnType("TEXT");
+            b.Property<string>("AttachmentSha256").HasColumnType("TEXT");
+            b.Property<long>("AttachmentSizeBytes").HasColumnType("INTEGER");
+            b.Property<string>("AttachmentVaultPath").HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<string>("Content").IsRequired().HasColumnType("TEXT");
+            b.Property<Guid>("ConversationId").HasColumnType("TEXT");
+            b.Property<Guid?>("LinkedTaskId").HasColumnType("TEXT");
+            b.Property<string>("PendingSyncTargetsJson").HasColumnType("TEXT");
+            b.Property<string>("SenderFullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<string>("SenderMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("SenderUsername").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<long>("SentAtUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("ConversationId");
+            b.HasIndex("SentAtUtc");
+            b.ToTable("ChatMessages");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.TimelinePlanEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<string>("Category").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("CreatedByFullName").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("CreatedByMachineId").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("CreatedByUsername").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Description").IsRequired().HasColumnType("TEXT");
+            b.Property<long>("EndDateUtc").HasColumnType("INTEGER");
+            b.Property<bool>("IsDeleted").HasColumnType("INTEGER");
+            b.Property<long>("StartDateUtc").HasColumnType("INTEGER");
+            b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("Title").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("StartDateUtc");
+            b.HasIndex("UpdatedAtUtc");
+            b.ToTable("TimelinePlans");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.EmployeeProfileEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("Department").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Email").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("EmployeeCode").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+            b.Property<string>("EmploymentStatus").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("FullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<long>("JoinDateUtc").HasColumnType("INTEGER");
+            b.Property<string>("LinkedMachineId").HasColumnType("TEXT");
+            b.Property<string>("LinkedUsername").HasColumnType("TEXT");
+            b.Property<string>("NationalId").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Notes").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Phone").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("PositionTitle").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("RolesCsv").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("EmployeeCode").IsUnique();
+            b.HasIndex("LinkedMachineId");
+            b.ToTable("EmployeeProfiles");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.AttendanceRecordEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<long?>("CheckInUtc").HasColumnType("INTEGER");
+            b.Property<long?>("CheckOutUtc").HasColumnType("INTEGER");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<string>("DateKey").IsRequired().HasMaxLength(16).HasColumnType("TEXT");
+            b.Property<string>("EmployeeCode").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+            b.Property<string>("EmployeeName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<Guid>("EmployeeProfileId").HasColumnType("TEXT");
+            b.Property<string>("MachineId").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Notes").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.Property<double>("WorkedHours").HasColumnType("REAL");
+            b.HasKey("Id");
+            b.HasIndex("DateKey");
+            b.HasIndex("EmployeeProfileId", "DateKey");
+            b.ToTable("AttendanceRecords");
         });
     }
 }

@@ -63,7 +63,7 @@ jobs:
       - name: Pack Velopack installer, delta patch, portable zip & releases.win.json
         shell: pwsh
         run: |
-          vpk pack --packId EzCompany --packVersion ${{ env.APP_VERSION }} --packDir publish/win-x64 --mainExe EzCompany.App.exe --outputDir Releases --packTitle "Ez Company" --runtime win-x64 --channel win
+          vpk pack --packId EzCompany --packVersion ${{ env.APP_VERSION }} --packDir publish/win-x64 --mainExe EzCompany.App.exe --outputDir Releases --packTitle "Ez Company" --icon src/EzCompany.App/Assets/EzCompany.ico --runtime win-x64 --channel win
           if (-not (Get-ChildItem -Path Releases -Filter "*Portable*.zip")) {
             Compress-Archive -Path "publish/win-x64/*" -DestinationPath "Releases/EzCompany-$($env:APP_VERSION)-win-Portable.zip" -Force
           }
