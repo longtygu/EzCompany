@@ -95,3 +95,67 @@ public sealed record TelemetryFullSnapshotDto(
 public sealed record ApplyPolicyRequestDto(string SignedPolicyJson);
 
 public sealed record ApplyPolicyResponseDto(bool Applied, long PolicyVersion, string Message);
+
+public sealed record PeerDirectoryEntryDto(
+    string MachineId,
+    string Username,
+    string FullName,
+    string Role,
+    bool IsOnline,
+    string? Endpoint);
+
+public sealed record ProfileUpdateNotificationDto(
+    string MachineId,
+    string Username,
+    string FullName);
+
+public sealed record TaskSyncPayloadDto(
+    Guid TaskId,
+    Guid CompanyId,
+    string TaskKind,
+    string Title,
+    string Description,
+    string Priority,
+    string Status,
+    string AssignerMachineId,
+    string AssignerUsername,
+    string AssignerFullName,
+    string AssignerRole,
+    string AssigneeMachineId,
+    string AssigneeUsername,
+    string AssigneeFullName,
+    string AssigneeRole,
+    DateTimeOffset? DueDateUtc,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    string HandoverNotes,
+    string? HandoverFileName,
+    string? HandoverFileSha256,
+    string? HandoverFileBase64,
+    DateTimeOffset? HandedOverAtUtc,
+    string ReviewNotes,
+    string SyncAction,
+    string HistoryNote,
+    string SenderSignedPolicyJson);
+
+public sealed record TaskSyncAckDto(bool Accepted, string Message);
+
+public sealed record AccountResetInitiateRequestDto(
+    string MachineId,
+    string Username,
+    string FullName,
+    string? RequestedNewUsername,
+    string Reason);
+
+public sealed record AccountResetInitiateResponseDto(
+    Guid RequestId,
+    string State,
+    string Message,
+    DateTimeOffset ExpiresAtUtc);
+
+public sealed record AccountResetStatusResponseDto(
+    Guid RequestId,
+    string State,
+    string? DecisionMessage,
+    string? SignedResetTicketJson);

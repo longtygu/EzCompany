@@ -17,6 +17,7 @@ public static class CryptoServiceCollectionExtensions
         services.AddSingleton<RecoveryKitService>();
         services.AddSingleton<ClockGuardService>();
         services.AddSingleton<PolicyEngine>();
+        services.AddSingleton<PasswordResetTicketService>();
         services.AddSingleton<IPermissionService, PermissionService>();
         return services;
     }

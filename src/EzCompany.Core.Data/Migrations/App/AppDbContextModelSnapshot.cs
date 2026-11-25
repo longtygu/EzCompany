@@ -156,5 +156,83 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("MachineId").IsUnique();
             b.ToTable("PairedDevices");
         });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.PasswordResetRequestEntity", b =>
+        {
+            b.Property<Guid>("RequestId").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<long?>("DecidedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("DecidedByAdminName").HasColumnType("TEXT");
+            b.Property<string>("DecisionMessage").HasColumnType("TEXT");
+            b.Property<string>("DevicePublicKeyBase64").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<long>("ExpiresAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("FullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<string>("MachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("RemoteIpAddress").HasColumnType("TEXT");
+            b.Property<long>("RequestedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("RequestedNewUsername").HasColumnType("TEXT");
+            b.Property<string>("SignedResetTicketJson").HasColumnType("TEXT");
+            b.Property<string>("State").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("Username").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.HasKey("RequestId");
+            b.HasIndex("RequestedAtUtc");
+            b.HasIndex("State");
+            b.ToTable("PasswordResetRequests");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.WorkTaskEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<string>("AssigneeFullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<string>("AssigneeMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("AssigneeRole").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+            b.Property<string>("AssigneeUsername").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("AssignerFullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<string>("AssignerMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("AssignerRole").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+            b.Property<string>("AssignerUsername").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<long?>("CompletedAtUtc").HasColumnType("INTEGER");
+            b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("Description").IsRequired().HasColumnType("TEXT");
+            b.Property<long?>("DueDateUtc").HasColumnType("INTEGER");
+            b.Property<long?>("HandedOverAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("HandoverFileName").HasColumnType("TEXT");
+            b.Property<string>("HandoverFileSha256").HasColumnType("TEXT");
+            b.Property<string>("HandoverNotes").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("HandoverVaultPath").HasColumnType("TEXT");
+            b.Property<string>("PendingSyncAction").HasColumnType("TEXT");
+            b.Property<string>("PendingSyncTargetMachineId").HasColumnType("TEXT");
+            b.Property<string>("Priority").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("ReviewNotes").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("TaskKind").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("Title").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("AssigneeMachineId");
+            b.HasIndex("AssignerMachineId");
+            b.HasIndex("Status");
+            b.HasIndex("UpdatedAtUtc");
+            b.ToTable("WorkTasks");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.WorkTaskHistoryEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<string>("Action").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+            b.Property<string>("ActorFullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<string>("ActorMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("ActorUsername").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("AttachmentFileName").HasColumnType("TEXT");
+            b.Property<string>("Note").IsRequired().HasColumnType("TEXT");
+            b.Property<Guid>("TaskId").HasColumnType("TEXT");
+            b.Property<long>("TimestampUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("TaskId");
+            b.HasIndex("TimestampUtc");
+            b.ToTable("WorkTaskHistories");
+        });
     }
 }

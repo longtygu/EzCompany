@@ -1,4 +1,5 @@
 using System.Windows;
+using EzCompany.App.Services;
 using EzCompany.App.ViewModels;
 using EzCompany.Core.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,12 +15,14 @@ public partial class WorkspaceWindow : FluentWindow
     public WorkspaceWindow(
         WorkspaceWindowViewModel viewModel,
         IServiceProvider services,
-        IWorkspaceWindowAccessor windowAccessor)
+        IWorkspaceWindowAccessor windowAccessor,
+        AppearanceSettingsService appearance)
     {
         _services = services;
         _windowAccessor = windowAccessor;
         DataContext = viewModel;
         InitializeComponent();
+        appearance.ApplyToWindow(this);
 
         viewModel.PolicyRefreshRequested += (_, _) =>
         {
@@ -43,6 +46,7 @@ public partial class WorkspaceWindow : FluentWindow
 
         Loaded += (_, _) =>
         {
+            appearance.ApplyToWindow(this);
             _windowAccessor.RegisterWindow(this);
             viewModel.InitializeWorkspace();
         };

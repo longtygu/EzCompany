@@ -6,7 +6,9 @@ using EzCompany.Core.Abstractions;
 using EzCompany.Core.Data;
 using EzCompany.Core.Data.Entities;
 using EzCompany.Core.LanAgent.Discovery;
+using EzCompany.Core.LanAgent.Models;
 using EzCompany.Core.LanAgent.Pairing;
+using EzCompany.Core.LanAgent.Recovery;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 
@@ -18,6 +20,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly ILocalStoragePaths _paths;
     private readonly ILanDiscoveryService _discovery;
     private readonly LanPairingClient _pairingClient;
+    private readonly LanAccountRecoveryClient _recoveryClient;
     private readonly ThemeService _theme;
     private readonly ILogger<MainWindowViewModel> _logger;
 
@@ -26,6 +29,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ILocalStoragePaths paths,
         ILanDiscoveryService discovery,
         LanPairingClient pairingClient,
+        LanAccountRecoveryClient recoveryClient,
         ThemeService theme,
         ILogger<MainWindowViewModel> logger)
     {
@@ -33,6 +37,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _paths = paths;
         _discovery = discovery;
         _pairingClient = pairingClient;
+        _recoveryClient = recoveryClient;
         _theme = theme;
         _logger = logger;
 
@@ -52,10 +57,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _profileBadge = string.Empty;
 
     // Initialized Login state
+    [ObservableProperty] private bool _isDirectorNode;
+    [ObservableProperty] private bool _isRecoveryMode;
     [ObservableProperty] private string _companyDisplayName = string.Empty;
     [ObservableProperty] private string _companyTaxCode = string.Empty;
     [ObservableProperty] private string _nodeRoleBadge = string.Empty;
     [ObservableProperty] private string _loginUsername = string.Empty;
+
+    // Initialized Employee Reset via LAN
+    [ObservableProperty] private string _employeeResetManualEndpoint = string.Empty;
+    [ObservableProperty] private string _employeeResetNewUsername = string.Empty;
+    [ObservableProperty] private string _employeeResetReason = "Quên mật khẩu đăng nhập";
+    [ObservableProperty] private string _employeeResetStatusText = string.Empty;
+
+    // Initialized Director Account Recovery via .recovery
+    [ObservableProperty] private string _directorRecoverFilePath = string.Empty;
+    [ObservableProperty] private string _directorRecoverNewUsername = string.Empty;
 
     // Branch 1: Genesis Director
     [ObservableProperty] private string _genesisCompanyName = string.Empty;
@@ -88,9 +105,31 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (company is { IsGenesisCompleted: true })
             {
                 IsInitialized = true;
+                IsDirectorNode = company.IsDirectorNode;
                 CompanyDisplayName = company.CompanyName;
                 CompanyTaxCode = $"MST: {company.TaxCode}";
                 NodeRoleBadge = company.IsDirectorNode ? "Nút Giám đốc (Director)" : "Nút Nhân viên (Workstation)";
+
+                LocalUserEntity? primaryUser = await _bootstrap.GetPrimaryLocalUserAsync();
+                if (primaryUser is not null)
+                {
+                    if (string.IsNullOrWhiteSpace(LoginUsername))
+                    {
+                        LoginUsername = primaryUser.Username;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(EmployeeResetNewUsername))
+                    {
+                        EmployeeResetNewUsername = primaryUser.Username;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(DirectorRecoverNewUsername))
+                    {
+                        DirectorRecoverNewUsername = primaryUser.Username;
+                    }
+                }
+
+                RefreshDiscoveredDirectors();
             }
             else
             {
@@ -126,6 +165,36 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void ToggleTheme() => _theme.ToggleTheme();
+
+    [RelayCommand]
+    private void OpenRecoveryMode()
+    {
+        ClearStatus();
+        RefreshDiscoveredDirectors();
+        IsRecoveryMode = true;
+    }
+
+    [RelayCommand]
+    private void CancelRecoveryMode()
+    {
+        ClearStatus();
+        IsRecoveryMode = false;
+    }
+
+    [RelayCommand]
+    private void BrowseDirectorRecoverFile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Chọn tệp Master Recovery Kit (.recovery)",
+            Filter = "Ez Company Recovery Kit (*.recovery)|*.recovery"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            DirectorRecoverFilePath = dialog.FileName;
+        }
+    }
 
     [RelayCommand]
     private void BrowseGenesisRecoveryOutput()
@@ -327,6 +396,119 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             _logger.LogError(ex, "Unexpected error during offline login.");
             SetError($"Lỗi đăng nhập: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public async Task ExecuteEmployeePasswordResetAsync(string newPassword, string confirmPassword)
+    {
+        ClearStatus();
+        string? endpoint = !string.IsNullOrWhiteSpace(EmployeeResetManualEndpoint)
+            ? EmployeeResetManualEndpoint.Trim()
+            : SelectedDirectorPeer?.Endpoint;
+
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            SetError("Vui lòng chọn máy Giám đốc đang online trên LAN hoặc nhập IP:Port.");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 6)
+        {
+            SetError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+            return;
+        }
+
+        if (newPassword != confirmPassword)
+        {
+            SetError("Mật khẩu mới và mật khẩu xác nhận không khớp.");
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            AccountResetInitiateResponseDto initiated = await _recoveryClient.SubmitResetRequestAsync(
+                endpoint,
+                EmployeeResetNewUsername,
+                EmployeeResetReason);
+
+            EmployeeResetStatusText = $"{initiated.Message} (Mã yêu cầu: {initiated.RequestId.ToString("N")[..8]})";
+            SetInfo("Đã gửi yêu cầu lên máy Giám đốc. Đang chờ Giám đốc duyệt...");
+
+            (AccountResetStatusResponseDto finalStatus, LocalUserEntity? updated) = await _recoveryClient
+                .WaitAndApplyResetAsync(endpoint, initiated.RequestId, newPassword);
+
+            if (updated is not null)
+            {
+                LoginUsername = updated.Username;
+                IsRecoveryMode = false;
+                EmployeeResetStatusText = string.Empty;
+                SetInfo($"Cấp lại tài khoản thành công (Tên đăng nhập: {updated.Username}). Hãy đăng nhập bằng mật khẩu mới.");
+            }
+            else
+            {
+                SetError(finalStatus.DecisionMessage ?? $"Yêu cầu cấp lại không thành công ({finalStatus.State}).");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Employee LAN password reset failed.");
+            SetError($"Lỗi yêu cầu cấp lại tài khoản: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public async Task ExecuteDirectorAccountRecoveryAsync(string recoveryPassword, string newPassword, string confirmPassword)
+    {
+        ClearStatus();
+        if (string.IsNullOrWhiteSpace(DirectorRecoverFilePath))
+        {
+            SetError("Vui lòng chọn tệp .recovery của công ty.");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(recoveryPassword))
+        {
+            SetError("Vui lòng nhập mật khẩu giải mã tệp .recovery.");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 6)
+        {
+            SetError("Mật khẩu đăng nhập mới phải có ít nhất 6 ký tự.");
+            return;
+        }
+
+        if (newPassword != confirmPassword)
+        {
+            SetError("Mật khẩu mới và mật khẩu xác nhận không khớp.");
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            LocalUserEntity recoveredUser = await _bootstrap.RecoverDirectorAccountWithRecoveryKitAsync(
+                DirectorRecoverFilePath,
+                recoveryPassword,
+                DirectorRecoverNewUsername,
+                newPassword);
+
+            LoginUsername = recoveredUser.Username;
+            IsRecoveryMode = false;
+            SetInfo($"Đã khôi phục tài khoản Giám đốc ({recoveredUser.Username}) thành công. Hãy đăng nhập bằng mật khẩu mới.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Director recovery kit password reset failed.");
+            SetError($"Khôi phục tài khoản thất bại: {ex.Message}");
         }
         finally
         {

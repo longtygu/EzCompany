@@ -37,3 +37,24 @@ public sealed record TelemetrySyncCompletedEvent(
     int NewUsageCount,
     int NewSnapshotCount,
     DateTimeOffset SyncedAtUtc);
+
+public sealed record UserProfileUpdatedEvent(
+    Guid UserId,
+    string Username,
+    string FullName,
+    string Role);
+
+public sealed record WorkTaskUpdatedEvent(
+    Guid TaskId,
+    string Action,
+    string Title,
+    string ActorFullName,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record PasswordResetRequestedEvent(
+    Guid RequestId,
+    string MachineId,
+    string Username,
+    string FullName,
+    string Reason,
+    DateTimeOffset RequestedAtUtc);

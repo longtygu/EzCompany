@@ -250,6 +250,46 @@
                     </StackPanel>
                 </Grid>
             </Border>
+
+            <!-- 6. Employee Password / Account Reset Requests -->
+            <Border Padding="14" Margin="0,16,0,0" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="6. Yêu cầu cấp lại tài khoản / mật khẩu từ Nhân viên"
+                                   FontSize="15"
+                                   FontWeight="SemiBold" />
+                        <ui:Button Grid.Column="1"
+                                   Content="Làm mới yêu cầu"
+                                   Command="{Binding RefreshPendingPasswordResetsCommand}" />
+                    </Grid>
+                    <DataGrid ItemsSource="{Binding PendingPasswordResets}"
+                              SelectedItem="{Binding SelectedPasswordReset}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              MaxHeight="150"
+                              Margin="0,0,0,8">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Nhân sự" Binding="{Binding FullName}" Width="140" />
+                            <DataGridTextColumn Header="User hiện tại" Binding="{Binding Username}" Width="110" />
+                            <DataGridTextColumn Header="User mới đề xuất" Binding="{Binding RequestedNewUsername}" Width="120" />
+                            <DataGridTextColumn Header="MachineId" Binding="{Binding MachineId}" Width="140" />
+                            <DataGridTextColumn Header="Lý do" Binding="{Binding Reason}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <WrapPanel>
+                        <ui:Button Appearance="Primary"
+                                   Content="Duyệt cấp lại mật khẩu (Ký số Ed25519)"
+                                   Command="{Binding ApproveSelectedPasswordResetCommand}"
+                                   Margin="0,0,8,0" />
+                        <ui:Button Content="Từ chối yêu cầu"
+                                   Command="{Binding RejectSelectedPasswordResetCommand}" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

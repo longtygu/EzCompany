@@ -79,6 +79,14 @@ public sealed class SafeMigrationService
                     await appDb.Database.MigrateAsync(ct).ConfigureAwait(false);
                 }
 
+                CompanyProfileEntity? company = await appDb.CompanyProfiles.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+                if (company is not null && company.AppSchemaVersion < GenesisBootstrapService.CurrentAppSchemaVersion)
+                {
+                    company.AppSchemaVersion = GenesisBootstrapService.CurrentAppSchemaVersion;
+                    company.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                    await appDb.SaveChangesAsync(ct).ConfigureAwait(false);
+                }
+
                 if (hasPendingTel || !File.Exists(_paths.TelemetryDbPath))
                 {
                     await telDb.Database.MigrateAsync(ct).ConfigureAwait(false);

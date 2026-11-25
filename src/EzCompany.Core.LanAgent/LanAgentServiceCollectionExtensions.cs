@@ -1,7 +1,9 @@
 using EzCompany.Core.LanAgent.Database;
 using EzCompany.Core.LanAgent.Discovery;
 using EzCompany.Core.LanAgent.Pairing;
+using EzCompany.Core.LanAgent.Recovery;
 using EzCompany.Core.LanAgent.Security;
+using EzCompany.Core.LanAgent.Tasks;
 using EzCompany.Core.LanAgent.Vault;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,6 +17,7 @@ public static class LanAgentServiceCollectionExtensions
         services.AddHttpClient("EzLan", client => client.Timeout = TimeSpan.FromSeconds(10));
 
         services.AddSingleton<DirectorRequestSigner>();
+        services.AddSingleton<DeviceRequestSigner>();
         services.AddSingleton<NonceReplayCache>();
         services.AddSingleton<VaultPathGuard>();
         services.AddSingleton<DatabaseSnapshotService>();
@@ -25,6 +28,11 @@ public static class LanAgentServiceCollectionExtensions
 
         services.AddSingleton<PairingSessionManager>();
         services.AddSingleton<LanPairingClient>();
+        services.AddSingleton<AccountRecoveryManager>();
+        services.AddSingleton<LanAccountRecoveryClient>();
+        services.AddSingleton<LanTaskClient>();
+        services.AddSingleton<PeerTaskSyncService>();
+        services.AddHostedService(sp => sp.GetRequiredService<PeerTaskSyncService>());
         services.AddSingleton<DirectorLanClient>();
 
         services.AddSingleton<LanAgentHost>();

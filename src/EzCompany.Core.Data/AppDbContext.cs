@@ -12,6 +12,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AccountingInvoiceEntity> AccountingInvoices => Set<AccountingInvoiceEntity>();
     public DbSet<LegalContractReviewEntity> LegalContractReviews => Set<LegalContractReviewEntity>();
     public DbSet<OfficeDocumentRecordEntity> OfficeDocumentRecords => Set<OfficeDocumentRecordEntity>();
+    public DbSet<WorkTaskEntity> WorkTasks => Set<WorkTaskEntity>();
+    public DbSet<WorkTaskHistoryEntity> WorkTaskHistories => Set<WorkTaskHistoryEntity>();
+    public DbSet<PasswordResetRequestEntity> PasswordResetRequests => Set<PasswordResetRequestEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -90,6 +93,53 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.CreatedAtUtc);
             e.Property(x => x.Operation).HasMaxLength(64).IsRequired();
+        });
+
+        modelBuilder.Entity<WorkTaskEntity>(e =>
+        {
+            e.ToTable("WorkTasks");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.AssigneeMachineId);
+            e.HasIndex(x => x.AssignerMachineId);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.UpdatedAtUtc);
+            e.Property(x => x.TaskKind).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Priority).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+            e.Property(x => x.AssignerMachineId).HasMaxLength(128).IsRequired();
+            e.Property(x => x.AssignerUsername).HasMaxLength(128).IsRequired();
+            e.Property(x => x.AssignerFullName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.AssignerRole).HasMaxLength(64).IsRequired();
+            e.Property(x => x.AssigneeMachineId).HasMaxLength(128).IsRequired();
+            e.Property(x => x.AssigneeUsername).HasMaxLength(128).IsRequired();
+            e.Property(x => x.AssigneeFullName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.AssigneeRole).HasMaxLength(64).IsRequired();
+        });
+
+        modelBuilder.Entity<WorkTaskHistoryEntity>(e =>
+        {
+            e.ToTable("WorkTaskHistories");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.TaskId);
+            e.HasIndex(x => x.TimestampUtc);
+            e.Property(x => x.Action).HasMaxLength(64).IsRequired();
+            e.Property(x => x.ActorMachineId).HasMaxLength(128).IsRequired();
+            e.Property(x => x.ActorUsername).HasMaxLength(128).IsRequired();
+            e.Property(x => x.ActorFullName).HasMaxLength(256).IsRequired();
+        });
+
+        modelBuilder.Entity<PasswordResetRequestEntity>(e =>
+        {
+            e.ToTable("PasswordResetRequests");
+            e.HasKey(x => x.RequestId);
+            e.HasIndex(x => x.State);
+            e.HasIndex(x => x.RequestedAtUtc);
+            e.Property(x => x.MachineId).HasMaxLength(128).IsRequired();
+            e.Property(x => x.DevicePublicKeyBase64).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Username).HasMaxLength(128).IsRequired();
+            e.Property(x => x.FullName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.State).HasMaxLength(32).IsRequired();
         });
     }
 }

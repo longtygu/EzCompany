@@ -3,10 +3,11 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  Title="Ez Company — Khởi tạo &amp; Đăng nhập"
-                 Width="840"
-                 Height="700"
+                 FontSize="{DynamicResource AppFontSize}"
+                 Width="880"
+                 Height="720"
                  MinWidth="760"
-                 MinHeight="620"
+                 MinHeight="640"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica">
@@ -28,272 +29,293 @@
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="28,16">
-            <StackPanel MaxWidth="700">
-                <Border Margin="0,0,0,14"
-                        Padding="12,10"
-                        CornerRadius="8"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        BorderThickness="1"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVis}}">
-                    <TextBlock Text="{Binding StatusMessage}"
-                               TextWrapping="Wrap"
-                               FontWeight="SemiBold" />
-                </Border>
-
-                <!-- Uninitialized: 3-Branch Genesis / Restore / Join LAN -->
-                <Grid Visibility="{Binding IsInitialized, Converter={StaticResource InvBoolToVis}}">
-                    <StackPanel>
-                        <TextBlock Text="Thiết lập Trạm làm việc Ez Company"
-                                   FontSize="22"
-                                   FontWeight="Bold" />
-                        <TextBlock Text="Một bản cài đặt duy nhất — chọn vai trò khởi tạo cho máy tính này."
-                                   Margin="0,4,0,16"
-                                   Opacity="0.75" />
-
-                        <TabControl SelectedIndex="{Binding SelectedBootstrapTab}">
-                            <!-- Branch 1: Genesis Director -->
-                            <TabItem Header="1. Khởi tạo Công ty mới (Giám đốc gốc)">
-                                <StackPanel Margin="8,14,8,8">
-                                    <TextBlock Text="Tạo cặp khóa gốc Ed25519 và xuất Master Recovery Kit (.recovery) bắt buộc."
-                                               Opacity="0.8"
-                                               Margin="0,0,0,12" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="12" />
-                                            <ColumnDefinition Width="220" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Tên Doanh nghiệp" Margin="0,0,0,4" />
-                                            <ui:TextBox Text="{Binding GenesisCompanyName, UpdateSourceTrigger=PropertyChanged}"
-                                                        PlaceholderText="Nhập tên công ty..." />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Mã số thuế" Margin="0,0,0,4" />
-                                            <ui:TextBox Text="{Binding GenesisTaxCode, UpdateSourceTrigger=PropertyChanged}"
-                                                        PlaceholderText="MST doanh nghiệp..." />
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <Grid Margin="0,12,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="12" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Họ và tên Giám đốc" Margin="0,0,0,4" />
-                                            <ui:TextBox Text="{Binding GenesisFullName, UpdateSourceTrigger=PropertyChanged}"
-                                                        PlaceholderText="Họ tên đầy đủ..." />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Tên đăng nhập" Margin="0,0,0,4" />
-                                            <ui:TextBox Text="{Binding GenesisUsername, UpdateSourceTrigger=PropertyChanged}"
-                                                        PlaceholderText="vd: giamdoc1" />
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <Grid Margin="0,12,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="12" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Mật khẩu đăng nhập máy" Margin="0,0,0,4" />
-                                            <ui:PasswordBox x:Name="GenesisLoginPasswordBox"
-                                                            PlaceholderText="Mật khẩu đăng nhập..." />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Mật khẩu Master Recovery (>= 8 ký tự)" Margin="0,0,0,4" />
-                                            <ui:PasswordBox x:Name="GenesisRecoveryPasswordBox"
-                                                            PlaceholderText="Mật khẩu bảo vệ .recovery..." />
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <TextBlock Text="Đường dẫn lưu Master Recovery Kit (.recovery) — Bắt buộc"
-                                               Margin="0,12,0,4" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="8" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <ui:TextBox Grid.Column="0"
-                                                    IsReadOnly="True"
-                                                    Text="{Binding GenesisRecoveryOutputPath}"
-                                                    PlaceholderText="Chọn nơi lưu tệp .recovery..." />
-                                        <ui:Button Grid.Column="2"
-                                                   Content="Chọn nơi lưu..."
-                                                   Command="{Binding BrowseGenesisRecoveryOutputCommand}" />
-                                    </Grid>
-
-                                    <ui:Button Margin="0,18,0,0"
-                                               Appearance="Primary"
-                                               Content="Khởi tạo Công ty &amp; Xuất Recovery Kit"
-                                               IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
-                                               Click="GenesisSubmitButton_Click" />
-                                </StackPanel>
-                            </TabItem>
-
-                            <!-- Branch 2: Secondary Director / Recovery -->
-                            <TabItem Header="2. Máy Giám đốc 2 / Khôi phục">
-                                <StackPanel Margin="8,14,8,8">
-                                    <TextBlock Text="Nhập tệp .recovery để đồng bộ chung khóa gốc (Hướng A) cho Giám đốc thứ 2 hoặc khôi phục sự cố."
-                                               Opacity="0.8"
-                                               TextWrapping="Wrap"
-                                               Margin="0,0,0,12" />
-
-                                    <TextBlock Text="Tệp Master Recovery Kit (.recovery)" Margin="0,0,0,4" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="8" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <ui:TextBox Grid.Column="0"
-                                                    IsReadOnly="True"
-                                                    Text="{Binding RestoreRecoveryFilePath}"
-                                                    PlaceholderText="Chọn tệp .recovery..." />
-                                        <ui:Button Grid.Column="2"
-                                                   Content="Mở tệp..."
-                                                   Command="{Binding BrowseRestoreRecoveryFileCommand}" />
-                                    </Grid>
-
-                                    <TextBlock Text="Mật khẩu giải mã Recovery Kit" Margin="0,12,0,4" />
-                                    <ui:PasswordBox x:Name="RestoreRecoveryPasswordBox"
-                                                    PlaceholderText="Nhập mật khẩu đã dùng khi xuất .recovery..." />
-
-                                    <Grid Margin="0,12,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="12" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Họ và tên Giám đốc 2" Margin="0,0,0,4" />
-                                            <ui:TextBox Text="{Binding RestoreFullName, UpdateSourceTrigger=PropertyChanged}"
-                                                        PlaceholderText="Họ tên đầy đủ..." />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Tên đăng nhập cục bộ" Margin="0,0,0,4" />
-                                            <ui:TextBox Text="{Binding RestoreUsername, UpdateSourceTrigger=PropertyChanged}"
-                                                        PlaceholderText="vd: giamdoc2" />
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <TextBlock Text="Mật khẩu đăng nhập máy Giám đốc 2" Margin="0,12,0,4" />
-                                    <ui:PasswordBox x:Name="RestoreLoginPasswordBox"
-                                                    PlaceholderText="Mật khẩu đăng nhập cục bộ..." />
-
-                                    <ui:Button Margin="0,18,0,0"
-                                               Appearance="Primary"
-                                               Content="Khôi phục &amp; Kích hoạt Máy Giám đốc"
-                                               IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
-                                               Click="RestoreSubmitButton_Click" />
-                                </StackPanel>
-                            </TabItem>
-
-                            <!-- Branch 3: Join LAN (Employee) -->
-                            <TabItem Header="3. Tham gia Mạng LAN Công ty">
-                                <StackPanel Margin="8,14,8,8">
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0"
-                                                   Text="{Binding LanPairingStatus}"
-                                                   VerticalAlignment="Center"
-                                                   TextWrapping="Wrap" />
-                                        <ui:Button Grid.Column="1"
-                                                   Content="Làm mới LAN"
-                                                   Command="{Binding RefreshDiscoveredDirectorsCommand}" />
-                                    </Grid>
-
-                                    <ListBox ItemsSource="{Binding DiscoveredDirectors}"
-                                             SelectedItem="{Binding SelectedDirectorPeer}"
-                                             MaxHeight="120"
-                                             Margin="0,0,0,10">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal" Margin="4,3">
-                                                    <TextBlock Text="{Binding CompanyName}" FontWeight="Bold" Margin="0,0,10,0" />
-                                                    <TextBlock Text="{Binding Endpoint}" Opacity="0.75" Margin="0,0,10,0" />
-                                                    <TextBlock Text="(Đang mở ghép đôi)"
-                                                               FontWeight="SemiBold"
-                                                               Visibility="{Binding PairingOpen, Converter={StaticResource BoolToVis}}" />
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
-
-                                    <TextBlock Text="Hoặc nhập địa chỉ máy Giám đốc (IP:Port)" Margin="0,0,0,4" />
-                                    <ui:TextBox Text="{Binding LanManualEndpoint, UpdateSourceTrigger=PropertyChanged}"
-                                                PlaceholderText="Để trống nếu đã chọn từ danh sách LAN bên trên..." />
-
-                                    <Grid Margin="0,12,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="12" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Họ và tên nhân viên" Margin="0,0,0,4" />
-                                            <ui:TextBox Text="{Binding LanFullName, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Tên đăng nhập cục bộ" Margin="0,0,0,4" />
-                                            <ui:TextBox Text="{Binding LanUsername, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <TextBlock Text="Mật khẩu cục bộ (băm Argon2id tại máy nhân viên, không gửi qua LAN)" Margin="0,12,0,4" />
-                                    <ui:PasswordBox x:Name="LanLoginPasswordBox"
-                                                    PlaceholderText="Mật khẩu đăng nhập offline..." />
-
-                                    <Border Margin="0,14,0,0"
-                                            Padding="14"
-                                            CornerRadius="8"
-                                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                            Visibility="{Binding LanSasCode, Converter={StaticResource NotEmptyToVis}}">
-                                        <TextBlock Text="{Binding LanSasCode}"
-                                                   FontSize="28"
-                                                   FontWeight="Bold"
-                                                   HorizontalAlignment="Center" />
-                                    </Border>
-
-                                    <ui:Button Margin="0,14,0,0"
-                                               Appearance="Primary"
-                                               Content="Gửi yêu cầu ghép đôi LAN (SAS 6 số)"
-                                               IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
-                                               Click="JoinLanButton_Click" />
-                                </StackPanel>
-                            </TabItem>
-                        </TabControl>
-                    </StackPanel>
-                </Grid>
-
-                <!-- Initialized: Offline Login Screen -->
-                <Grid Visibility="{Binding IsInitialized, Converter={StaticResource BoolToVis}}">
-                    <Border Padding="28"
-                            CornerRadius="12"
+        <Grid Grid.Row="1">
+            <!-- Uninitialized: 3-Branch Genesis / Restore / Join LAN -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          Padding="28,16"
+                          Visibility="{Binding IsInitialized, Converter={StaticResource InvBoolToVis}}">
+                <StackPanel MaxWidth="720">
+                    <Border Margin="0,0,0,14"
+                            Padding="12,10"
+                            CornerRadius="{DynamicResource AppCardCornerRadius}"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                             BorderThickness="1"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                        <StackPanel>
-                            <TextBlock Text="{Binding CompanyDisplayName}"
-                                       FontSize="24"
-                                       FontWeight="Bold" />
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,18">
-                                <TextBlock Text="{Binding CompanyTaxCode}" Opacity="0.8" Margin="0,0,14,0" />
-                                <TextBlock Text="{Binding NodeRoleBadge}" FontWeight="SemiBold" />
-                            </StackPanel>
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                            Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVis}}">
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   TextWrapping="Wrap"
+                                   FontWeight="SemiBold" />
+                    </Border>
 
+                    <TextBlock Text="Thiết lập Trạm làm việc Ez Company"
+                               FontSize="22"
+                               FontWeight="Bold" />
+                    <TextBlock Text="Một bản cài đặt duy nhất — chọn vai trò khởi tạo cho máy tính này."
+                               Margin="0,4,0,16"
+                               Opacity="0.75" />
+
+                    <TabControl SelectedIndex="{Binding SelectedBootstrapTab}">
+                        <!-- Branch 1: Genesis Director -->
+                        <TabItem Header="1. Khởi tạo Công ty mới (Giám đốc gốc)">
+                            <StackPanel Margin="8,14,8,8">
+                                <TextBlock Text="Tạo cặp khóa gốc Ed25519 và xuất Master Recovery Kit (.recovery) bắt buộc."
+                                           Opacity="0.8"
+                                           Margin="0,0,0,12" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="220" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Tên Doanh nghiệp" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding GenesisCompanyName, UpdateSourceTrigger=PropertyChanged}"
+                                                    PlaceholderText="Nhập tên công ty..." />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Mã số thuế" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding GenesisTaxCode, UpdateSourceTrigger=PropertyChanged}"
+                                                    PlaceholderText="MST doanh nghiệp..." />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Họ và tên Giám đốc" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding GenesisFullName, UpdateSourceTrigger=PropertyChanged}"
+                                                    PlaceholderText="Họ tên đầy đủ..." />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Tên đăng nhập" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding GenesisUsername, UpdateSourceTrigger=PropertyChanged}"
+                                                    PlaceholderText="vd: giamdoc1" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Mật khẩu đăng nhập máy" Margin="0,0,0,4" />
+                                        <ui:PasswordBox x:Name="GenesisLoginPasswordBox"
+                                                        PlaceholderText="Mật khẩu đăng nhập..." />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Mật khẩu Master Recovery (>= 8 ký tự)" Margin="0,0,0,4" />
+                                        <ui:PasswordBox x:Name="GenesisRecoveryPasswordBox"
+                                                        PlaceholderText="Mật khẩu bảo vệ .recovery..." />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="Đường dẫn lưu Master Recovery Kit (.recovery) — Bắt buộc"
+                                           Margin="0,12,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                IsReadOnly="True"
+                                                Text="{Binding GenesisRecoveryOutputPath}"
+                                                PlaceholderText="Chọn nơi lưu tệp .recovery..." />
+                                    <ui:Button Grid.Column="2"
+                                               Content="Chọn nơi lưu..."
+                                               Command="{Binding BrowseGenesisRecoveryOutputCommand}" />
+                                </Grid>
+
+                                <ui:Button Margin="0,18,0,0"
+                                           Appearance="Primary"
+                                           Content="Khởi tạo Công ty &amp; Xuất Recovery Kit"
+                                           IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
+                                           Click="GenesisSubmitButton_Click" />
+                            </StackPanel>
+                        </TabItem>
+
+                        <!-- Branch 2: Secondary Director / Recovery -->
+                        <TabItem Header="2. Máy Giám đốc 2 / Khôi phục">
+                            <StackPanel Margin="8,14,8,8">
+                                <TextBlock Text="Nhập tệp .recovery để đồng bộ chung khóa gốc (Hướng A) cho Giám đốc thứ 2 hoặc khôi phục sự cố."
+                                           Opacity="0.8"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,12" />
+
+                                <TextBlock Text="Tệp Master Recovery Kit (.recovery)" Margin="0,0,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                IsReadOnly="True"
+                                                Text="{Binding RestoreRecoveryFilePath}"
+                                                PlaceholderText="Chọn tệp .recovery..." />
+                                    <ui:Button Grid.Column="2"
+                                               Content="Mở tệp..."
+                                               Command="{Binding BrowseRestoreRecoveryFileCommand}" />
+                                </Grid>
+
+                                <TextBlock Text="Mật khẩu giải mã Recovery Kit" Margin="0,12,0,4" />
+                                <ui:PasswordBox x:Name="RestoreRecoveryPasswordBox"
+                                                PlaceholderText="Nhập mật khẩu đã dùng khi xuất .recovery..." />
+
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Họ và tên Giám đốc 2" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding RestoreFullName, UpdateSourceTrigger=PropertyChanged}"
+                                                    PlaceholderText="Họ tên đầy đủ..." />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Tên đăng nhập cục bộ" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding RestoreUsername, UpdateSourceTrigger=PropertyChanged}"
+                                                    PlaceholderText="vd: giamdoc2" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="Mật khẩu đăng nhập máy Giám đốc 2" Margin="0,12,0,4" />
+                                <ui:PasswordBox x:Name="RestoreLoginPasswordBox"
+                                                PlaceholderText="Mật khẩu đăng nhập cục bộ..." />
+
+                                <ui:Button Margin="0,18,0,0"
+                                           Appearance="Primary"
+                                           Content="Khôi phục &amp; Kích hoạt Máy Giám đốc"
+                                           IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
+                                           Click="RestoreSubmitButton_Click" />
+                            </StackPanel>
+                        </TabItem>
+
+                        <!-- Branch 3: Join LAN (Employee) -->
+                        <TabItem Header="3. Tham gia Mạng LAN Công ty">
+                            <StackPanel Margin="8,14,8,8">
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding LanPairingStatus}"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap" />
+                                    <ui:Button Grid.Column="1"
+                                               Content="Làm mới LAN"
+                                               Command="{Binding RefreshDiscoveredDirectorsCommand}" />
+                                </Grid>
+
+                                <ListBox ItemsSource="{Binding DiscoveredDirectors}"
+                                         SelectedItem="{Binding SelectedDirectorPeer}"
+                                         MaxHeight="120"
+                                         Margin="0,0,0,10">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="4,3">
+                                                <TextBlock Text="{Binding CompanyName}" FontWeight="Bold" Margin="0,0,10,0" />
+                                                <TextBlock Text="{Binding Endpoint}" Opacity="0.75" Margin="0,0,10,0" />
+                                                <TextBlock Text="(Đang mở ghép đôi)"
+                                                           FontWeight="SemiBold"
+                                                           Visibility="{Binding PairingOpen, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <TextBlock Text="Hoặc nhập địa chỉ máy Giám đốc (IP:Port)" Margin="0,0,0,4" />
+                                <ui:TextBox Text="{Binding LanManualEndpoint, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="Để trống nếu đã chọn từ danh sách LAN bên trên..." />
+
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Họ và tên nhân viên" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding LanFullName, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Tên đăng nhập cục bộ" Margin="0,0,0,4" />
+                                        <ui:TextBox Text="{Binding LanUsername, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="Mật khẩu cục bộ (băm Argon2id tại máy nhân viên, không gửi qua LAN)" Margin="0,12,0,4" />
+                                <ui:PasswordBox x:Name="LanLoginPasswordBox"
+                                                PlaceholderText="Mật khẩu đăng nhập offline..." />
+
+                                <Border Margin="0,14,0,0"
+                                        Padding="14"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                        Visibility="{Binding LanSasCode, Converter={StaticResource NotEmptyToVis}}">
+                                    <TextBlock Text="{Binding LanSasCode}"
+                                               FontSize="28"
+                                               FontWeight="Bold"
+                                               HorizontalAlignment="Center" />
+                                </Border>
+
+                                <ui:Button Margin="0,14,0,0"
+                                           Appearance="Primary"
+                                           Content="Gửi yêu cầu ghép đôi LAN (SAS 6 số)"
+                                           IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
+                                           Click="JoinLanButton_Click" />
+                            </StackPanel>
+                        </TabItem>
+                    </TabControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Initialized: Centered Offline Login + Account Reset / Director Recovery -->
+            <Grid Visibility="{Binding IsInitialized, Converter={StaticResource BoolToVis}}"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Margin="24">
+                <Border Width="490"
+                        Padding="28"
+                        CornerRadius="{DynamicResource AppCardCornerRadius}"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding CompanyDisplayName}"
+                                   FontSize="24"
+                                   FontWeight="Bold"
+                                   TextAlignment="Center" />
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
+                                    Margin="0,6,0,14">
+                            <TextBlock Text="{Binding CompanyTaxCode}" Opacity="0.8" Margin="0,0,14,0" />
+                            <TextBlock Text="{Binding NodeRoleBadge}" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" />
+                        </StackPanel>
+
+                        <Border Margin="0,0,0,12"
+                                Padding="10,8"
+                                CornerRadius="8"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVis}}">
+                            <TextBlock Text="{Binding StatusMessage}"
+                                       TextWrapping="Wrap"
+                                       FontWeight="SemiBold" />
+                        </Border>
+
+                        <!-- Login Form -->
+                        <StackPanel Visibility="{Binding IsRecoveryMode, Converter={StaticResource InvBoolToVis}}">
                             <TextBlock Text="Đăng nhập Offline (Argon2id + Xác thực policy.lic)"
                                        Opacity="0.75"
+                                       HorizontalAlignment="Center"
                                        Margin="0,0,0,16" />
 
                             <TextBlock Text="Tên đăng nhập" Margin="0,0,0,4" />
@@ -305,15 +327,165 @@
                                             PlaceholderText="Nhập mật khẩu..." />
 
                             <ui:Button Margin="0,20,0,0"
+                                       HorizontalAlignment="Stretch"
                                        Appearance="Primary"
                                        Content="Đăng nhập vào Không gian làm việc"
                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
                                        Click="OfflineLoginButton_Click" />
+
+                            <!-- Employee reset request trigger -->
+                            <ui:Button Margin="0,10,0,0"
+                                       HorizontalAlignment="Stretch"
+                                       Appearance="Secondary"
+                                       Content="Yêu cầu cấp lại tài khoản / mật khẩu"
+                                       Visibility="{Binding IsDirectorNode, Converter={StaticResource InvBoolToVis}}"
+                                       Command="{Binding OpenRecoveryModeCommand}" />
+
+                            <!-- Director .recovery trigger -->
+                            <ui:Button Margin="0,10,0,0"
+                                       HorizontalAlignment="Stretch"
+                                       Appearance="Secondary"
+                                       Content="Khôi phục tài khoản (bằng tệp .recovery)"
+                                       Visibility="{Binding IsDirectorNode, Converter={StaticResource BoolToVis}}"
+                                       Command="{Binding OpenRecoveryModeCommand}" />
                         </StackPanel>
-                    </Border>
-                </Grid>
-            </StackPanel>
-        </ScrollViewer>
+
+                        <!-- Employee LAN Password Reset Request Panel -->
+                        <StackPanel Visibility="{Binding IsRecoveryMode, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Visibility="{Binding IsDirectorNode, Converter={StaticResource InvBoolToVis}}">
+                                <TextBlock Text="Yêu cầu Giám đốc cấp lại tài khoản / mật khẩu"
+                                           FontWeight="SemiBold"
+                                           FontSize="16"
+                                           Margin="0,0,0,8" />
+
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Chọn máy Giám đốc đang Online trên LAN:" VerticalAlignment="Center" Opacity="0.8" />
+                                    <ui:Button Grid.Column="1" Content="Làm mới" Command="{Binding RefreshDiscoveredDirectorsCommand}" />
+                                </Grid>
+
+                                <ListBox ItemsSource="{Binding DiscoveredDirectors}"
+                                         SelectedItem="{Binding SelectedDirectorPeer}"
+                                         MaxHeight="80"
+                                         Margin="0,0,0,8">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="2">
+                                                <TextBlock Text="{Binding CompanyName}" FontWeight="SemiBold" Margin="0,0,8,0" />
+                                                <TextBlock Text="{Binding Endpoint}" Opacity="0.75" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <ui:TextBox Text="{Binding EmployeeResetManualEndpoint, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="Hoặc nhập IP:Port Giám đốc..."
+                                            Margin="0,0,0,8" />
+
+                                <ui:TextBox Text="{Binding EmployeeResetNewUsername, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="Tên đăng nhập mới (hoặc giữ nguyên)..."
+                                            Margin="0,0,0,8" />
+
+                                <ui:PasswordBox x:Name="EmployeeResetNewPasswordBox"
+                                                PlaceholderText="Mật khẩu mới cục bộ (>= 6 ký tự, không gửi qua LAN)..."
+                                                Margin="0,0,0,8" />
+                                <ui:PasswordBox x:Name="EmployeeResetConfirmPasswordBox"
+                                                PlaceholderText="Nhập lại mật khẩu mới..."
+                                                Margin="0,0,0,8" />
+
+                                <ui:TextBox Text="{Binding EmployeeResetReason, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="Lý do yêu cầu cấp lại..."
+                                            Margin="0,0,0,8" />
+
+                                <TextBlock Text="{Binding EmployeeResetStatusText}"
+                                           Opacity="0.8"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,8"
+                                           Visibility="{Binding EmployeeResetStatusText, Converter={StaticResource NotEmptyToVis}}" />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:Button Grid.Column="0"
+                                               HorizontalAlignment="Stretch"
+                                               Appearance="Primary"
+                                               Content="Gửi yêu cầu lên Giám đốc"
+                                               IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
+                                               Click="EmployeeResetSubmitButton_Click" />
+                                    <ui:Button Grid.Column="2"
+                                               Content="Quay lại"
+                                               IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
+                                               Command="{Binding CancelRecoveryModeCommand}" />
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- Director .recovery Account Recovery Panel -->
+                            <StackPanel Visibility="{Binding IsDirectorNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Khôi phục tài khoản Giám đốc bằng tệp .recovery"
+                                           FontWeight="SemiBold"
+                                           FontSize="16"
+                                           Margin="0,0,0,10" />
+
+                                <TextBlock Text="Tệp Master Recovery Kit (.recovery)" Margin="0,0,0,4" />
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                IsReadOnly="True"
+                                                Text="{Binding DirectorRecoverFilePath}"
+                                                PlaceholderText="Chọn tệp .recovery..." />
+                                    <ui:Button Grid.Column="2"
+                                               Content="Mở tệp..."
+                                               Command="{Binding BrowseDirectorRecoverFileCommand}" />
+                                </Grid>
+
+                                <ui:PasswordBox x:Name="DirectorRecoverKitPasswordBox"
+                                                PlaceholderText="Mật khẩu giải mã .recovery..."
+                                                Margin="0,0,0,8" />
+
+                                <ui:TextBox Text="{Binding DirectorRecoverNewUsername, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="Tên đăng nhập Giám đốc..."
+                                            Margin="0,0,0,8" />
+
+                                <ui:PasswordBox x:Name="DirectorRecoverNewPasswordBox"
+                                                PlaceholderText="Mật khẩu đăng nhập mới (>= 6 ký tự)..."
+                                                Margin="0,0,0,8" />
+                                <ui:PasswordBox x:Name="DirectorRecoverConfirmPasswordBox"
+                                                PlaceholderText="Nhập lại mật khẩu mới..."
+                                                Margin="0,0,0,12" />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:Button Grid.Column="0"
+                                               HorizontalAlignment="Stretch"
+                                               Appearance="Primary"
+                                               Content="Khôi phục tài khoản Giám đốc"
+                                               IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
+                                               Click="DirectorRecoverAccountSubmitButton_Click" />
+                                    <ui:Button Grid.Column="2"
+                                               Content="Quay lại"
+                                               IsEnabled="{Binding IsBusy, Converter={StaticResource InvBool}}"
+                                               Command="{Binding CancelRecoveryModeCommand}" />
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
 
         <Border Grid.Row="2"
                 Padding="16,8"

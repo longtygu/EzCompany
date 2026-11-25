@@ -19,7 +19,7 @@ public sealed record AuthenticationResult(
 /// </summary>
 public sealed class GenesisBootstrapService
 {
-    public const int CurrentAppSchemaVersion = 1;
+    public const int CurrentAppSchemaVersion = 2;
 
     private readonly IDbContextFactory<AppDbContext> _appDbFactory;
     private readonly ILocalStoragePaths _paths;
@@ -33,6 +33,8 @@ public sealed class GenesisBootstrapService
     private readonly PolicyEngine _policyEngine;
     private readonly IAuditLogger _audit;
     private readonly TimeProvider _timeProvider;
+    private readonly PasswordResetTicketService _ticketService;
+    private readonly IEventBus? _eventBus;
 
     public GenesisBootstrapService(
         IDbContextFactory<AppDbContext> appDbFactory,
@@ -46,7 +48,9 @@ public sealed class GenesisBootstrapService
         RecoveryKitService recoveryKit,
         PolicyEngine policyEngine,
         IAuditLogger audit,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        PasswordResetTicketService? ticketService = null,
+        IEventBus? eventBus = null)
     {
         _appDbFactory = appDbFactory;
         _paths = paths;
@@ -60,12 +64,20 @@ public sealed class GenesisBootstrapService
         _policyEngine = policyEngine;
         _audit = audit;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _ticketService = ticketService ?? new PasswordResetTicketService(ed25519, _timeProvider);
+        _eventBus = eventBus;
     }
 
     public async Task<CompanyProfileEntity?> GetCompanyProfileAsync(CancellationToken ct = default)
     {
         await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         return await db.CompanyProfiles.AsNoTracking().FirstOrDefaultAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<LocalUserEntity?> GetPrimaryLocalUserAsync(CancellationToken ct = default)
+    {
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await db.LocalUsers.AsNoTracking().FirstOrDefaultAsync(x => x.IsActive, ct).ConfigureAwait(false);
     }
 
     public async Task<bool> IsInitializedAsync(CancellationToken ct = default)
@@ -555,6 +567,347 @@ public sealed class GenesisBootstrapService
             true,
             _permissions.CurrentPolicy,
             company);
+    }
+
+    /// <summary>
+    /// Allows an authenticated Director or Employee to update their display name, username,
+    /// and optionally local Argon2id login password after verifying their current password.
+    /// </summary>
+    public async Task<LocalUserEntity> ChangeCredentialsAsync(
+        Guid userId,
+        string currentPassword,
+        string newFullName,
+        string newUsername,
+        string? newPassword,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(currentPassword))
+        {
+            throw new ArgumentException("Vui lòng nhập mật khẩu hiện tại để xác nhận.", nameof(currentPassword));
+        }
+
+        if (string.IsNullOrWhiteSpace(newFullName))
+        {
+            throw new ArgumentException("Họ và tên không được để trống.", nameof(newFullName));
+        }
+
+        if (string.IsNullOrWhiteSpace(newUsername))
+        {
+            throw new ArgumentException("Tên đăng nhập không được để trống.", nameof(newUsername));
+        }
+
+        if (!string.IsNullOrEmpty(newPassword) && newPassword.Length < 6)
+        {
+            throw new ArgumentException("Mật khẩu mới phải có ít nhất 6 ký tự.", nameof(newPassword));
+        }
+
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        CompanyProfileEntity? company = await db.CompanyProfiles.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (company is null || !company.IsGenesisCompleted)
+        {
+            throw new InvalidOperationException("Máy trạm chưa được khởi tạo.");
+        }
+
+        LocalUserEntity? user = await db.LocalUsers
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.IsActive, ct)
+            .ConfigureAwait(false);
+        if (user is null)
+        {
+            throw new InvalidOperationException("Không tìm thấy tài khoản cục bộ.");
+        }
+
+        if (!_argon2.VerifyPassword(currentPassword, user.PasswordHash))
+        {
+            await _audit.LogAsync("CREDENTIALS_CHANGE_DENIED", "core.auth", user.Username, "Sai mật khẩu hiện tại", "Warning", ct)
+                .ConfigureAwait(false);
+            throw new UnauthorizedAccessException("Mật khẩu hiện tại không chính xác.");
+        }
+
+        string normalizedNewUsername = newUsername.Trim().ToLowerInvariant();
+        bool duplicateUsername = await db.LocalUsers
+            .AnyAsync(x => x.UserId != userId && x.Username == normalizedNewUsername, ct)
+            .ConfigureAwait(false);
+        if (duplicateUsername)
+        {
+            throw new InvalidOperationException($"Tên đăng nhập '{normalizedNewUsername}' đã tồn tại trên máy này.");
+        }
+
+        string trimmedFullName = newFullName.Trim();
+        user.FullName = trimmedFullName;
+        user.Username = normalizedNewUsername;
+        if (!string.IsNullOrEmpty(newPassword))
+        {
+            user.PasswordHash = _argon2.HashPassword(newPassword);
+        }
+
+        PairedDeviceEntity? selfDevice = await db.PairedDevices
+            .FirstOrDefaultAsync(x => x.MachineId == _paths.MachineId, ct)
+            .ConfigureAwait(false);
+        if (selfDevice is not null)
+        {
+            selfDevice.Username = normalizedNewUsername;
+            selfDevice.FullName = trimmedFullName;
+        }
+
+        if (company.IsDirectorNode && _keyStore.HasRootPrivateKey)
+        {
+            await ReissueLocalDirectorPolicyAsync(selfDevice, normalizedNewUsername, trimmedFullName, ct)
+                .ConfigureAwait(false);
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        if (_session.IsAuthenticated && _session.UserId == user.UserId)
+        {
+            _session.SetAuthenticatedUser(user.UserId, user.Username, user.FullName, user.Role);
+        }
+
+        await _audit.LogAsync(
+            "CREDENTIALS_UPDATED",
+            "core.auth",
+            user.Username,
+            $"FullName={user.FullName};PasswordChanged={!string.IsNullOrEmpty(newPassword)}",
+            "Info",
+            ct).ConfigureAwait(false);
+
+        _eventBus?.Publish(new UserProfileUpdatedEvent(user.UserId, user.Username, user.FullName, user.Role));
+        return user;
+    }
+
+    /// <summary>
+    /// Recovers local Director credentials on an already-initialized Director machine using
+    /// the company's <c>.recovery</c> Master Recovery Kit and recovery password.
+    /// </summary>
+    public async Task<LocalUserEntity> RecoverDirectorAccountWithRecoveryKitAsync(
+        string recoveryFilePath,
+        string recoveryPassword,
+        string? newUsername,
+        string newLoginPassword,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(recoveryFilePath) || !File.Exists(recoveryFilePath))
+        {
+            throw new FileNotFoundException("Không tìm thấy tệp khôi phục (.recovery).", recoveryFilePath);
+        }
+
+        if (string.IsNullOrEmpty(recoveryPassword))
+        {
+            throw new ArgumentException("Vui lòng nhập mật khẩu giải mã tệp .recovery.", nameof(recoveryPassword));
+        }
+
+        if (string.IsNullOrEmpty(newLoginPassword) || newLoginPassword.Length < 6)
+        {
+            throw new ArgumentException("Mật khẩu mới phải có ít nhất 6 ký tự.", nameof(newLoginPassword));
+        }
+
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        CompanyProfileEntity? company = await db.CompanyProfiles.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (company is null || !company.IsGenesisCompleted || !company.IsDirectorNode)
+        {
+            throw new InvalidOperationException("Chức năng này chỉ dành cho máy Giám đốc đã khởi tạo.");
+        }
+
+        RecoveryKitPayload recovered = await _recoveryKit.ImportFromFileAsync(recoveryFilePath, recoveryPassword, ct)
+            .ConfigureAwait(false);
+
+        if (recovered.CompanyId != company.CompanyId ||
+            !string.Equals(recovered.RootPublicKeyBase64, company.RootPublicKeyBase64, StringComparison.Ordinal))
+        {
+            await _audit.LogAsync("DIRECTOR_RECOVERY_MISMATCH", "core.auth", company.CompanyName, null, "Warning", ct)
+                .ConfigureAwait(false);
+            throw new InvalidOperationException("Tệp .recovery không thuộc doanh nghiệp hoặc cặp khóa gốc trên máy này.");
+        }
+
+        byte[] rootPriv = Convert.FromBase64String(recovered.RootPrivateKeyBase64);
+        byte[] rootPub = Convert.FromBase64String(recovered.RootPublicKeyBase64);
+        try
+        {
+            if (!_keyStore.HasRootPrivateKey)
+            {
+                _keyStore.SaveRootKeyPair(rootPriv, rootPub);
+            }
+
+            LocalUserEntity? directorUser = await db.LocalUsers
+                .FirstOrDefaultAsync(x => x.IsActive, ct)
+                .ConfigureAwait(false);
+            if (directorUser is null)
+            {
+                throw new InvalidOperationException("Không tìm thấy tài khoản Giám đốc cục bộ.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(newUsername))
+            {
+                string normalizedUser = newUsername.Trim().ToLowerInvariant();
+                bool conflict = await db.LocalUsers
+                    .AnyAsync(x => x.UserId != directorUser.UserId && x.Username == normalizedUser, ct)
+                    .ConfigureAwait(false);
+                if (conflict)
+                {
+                    throw new InvalidOperationException($"Tên đăng nhập '{normalizedUser}' đã được sử dụng.");
+                }
+
+                directorUser.Username = normalizedUser;
+            }
+
+            directorUser.PasswordHash = _argon2.HashPassword(newLoginPassword);
+
+            PairedDeviceEntity? selfDevice = await db.PairedDevices
+                .FirstOrDefaultAsync(x => x.MachineId == _paths.MachineId, ct)
+                .ConfigureAwait(false);
+            if (selfDevice is not null)
+            {
+                selfDevice.Username = directorUser.Username;
+                selfDevice.FullName = directorUser.FullName;
+            }
+
+            await ReissueLocalDirectorPolicyAsync(selfDevice, directorUser.Username, directorUser.FullName, ct)
+                .ConfigureAwait(false);
+
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            await _audit.LogAsync(
+                "DIRECTOR_ACCOUNT_RECOVERED",
+                "core.auth",
+                directorUser.Username,
+                $"MachineId={_paths.MachineId}",
+                "Info",
+                ct).ConfigureAwait(false);
+
+            return directorUser;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(rootPriv);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a Director Ed25519 Root-signed password reset ticket locally on the employee workstation
+    /// and updates the employee's local Argon2id password without ever sending passwords over LAN.
+    /// </summary>
+    public async Task<LocalUserEntity> ApplyApprovedPasswordResetAsync(
+        string signedResetTicketJson,
+        string newLocalPassword,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(newLocalPassword) || newLocalPassword.Length < 6)
+        {
+            throw new ArgumentException("Mật khẩu mới phải có ít nhất 6 ký tự.", nameof(newLocalPassword));
+        }
+
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        CompanyProfileEntity? company = await db.CompanyProfiles.AsNoTracking().FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (company is null || !company.IsGenesisCompleted)
+        {
+            throw new InvalidOperationException("Máy trạm chưa được ghép đôi với công ty.");
+        }
+
+        byte[]? pinnedRootPub = _keyStore.LoadPinnedRootPublicKey()
+            ?? Convert.FromBase64String(company.RootPublicKeyBase64);
+        byte[]? devicePub = _keyStore.LoadDevicePublicKey();
+
+        (bool isValid, string message, PasswordResetTicketPayload? ticket) = _ticketService.VerifyTicketJson(
+            signedResetTicketJson,
+            pinnedRootPub,
+            _paths.MachineId,
+            devicePub,
+            company.CompanyId);
+
+        if (!isValid || ticket is null)
+        {
+            await _audit.LogAsync("EMPLOYEE_RESET_TICKET_INVALID", "core.auth", _paths.MachineId, message, "Warning", ct)
+                .ConfigureAwait(false);
+            throw new InvalidOperationException(message);
+        }
+
+        LocalUserEntity? localUser = await db.LocalUsers
+            .FirstOrDefaultAsync(x => x.IsActive, ct)
+            .ConfigureAwait(false);
+        if (localUser is null)
+        {
+            throw new InvalidOperationException("Không tìm thấy tài khoản nhân viên cục bộ.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(ticket.ApprovedUsername))
+        {
+            localUser.Username = ticket.ApprovedUsername.Trim().ToLowerInvariant();
+        }
+
+        localUser.PasswordHash = _argon2.HashPassword(newLocalPassword);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        await _audit.LogAsync(
+            "EMPLOYEE_PASSWORD_RESET_COMPLETED",
+            "core.auth",
+            localUser.Username,
+            $"ApprovedBy={ticket.ApprovedByAdminName};RequestId={ticket.RequestId}",
+            "Info",
+            ct).ConfigureAwait(false);
+
+        return localUser;
+    }
+
+    private async Task ReissueLocalDirectorPolicyAsync(
+        PairedDeviceEntity? selfDevice,
+        string username,
+        string fullName,
+        CancellationToken ct)
+    {
+        byte[]? rootPriv = _keyStore.LoadRootPrivateKey();
+        byte[]? rootPub = _keyStore.LoadPinnedRootPublicKey();
+        byte[]? devicePub = _keyStore.LoadDevicePublicKey();
+        string? existingJson = _keyStore.LoadPolicyLicenseJson();
+
+        if (rootPriv is null || rootPub is null || devicePub is null || string.IsNullOrWhiteSpace(existingJson))
+        {
+            return;
+        }
+
+        try
+        {
+            SignedPolicyDocument? doc = _policyEngine.DeserializeDocument(existingJson);
+            if (doc is null)
+            {
+                return;
+            }
+
+            PolicyPayload? payload = _policyEngine.TryDecodePayloadUnverified(doc);
+            if (payload is null)
+            {
+                return;
+            }
+
+            DateTimeOffset now = _timeProvider.GetUtcNow();
+            PolicyPayload updated = payload with
+            {
+                Username = username,
+                FullName = fullName,
+                PolicyVersion = payload.PolicyVersion + 1,
+                IssuedAtUtc = now,
+                ExpiresAtUtc = now.AddDays(PolicyEngine.DefaultValidityDays)
+            };
+
+            string renewedJson = _policyEngine.SerializeDocument(_policyEngine.IssueSignedPolicy(updated, rootPriv));
+            _keyStore.SavePolicyLicenseJson(renewedJson);
+
+            if (selfDevice is not null)
+            {
+                selfDevice.CurrentPolicyVersion = updated.PolicyVersion;
+                selfDevice.CurrentPolicyJson = renewedJson;
+            }
+
+            PolicyVerificationResult verified = _policyEngine.VerifyOffline(renewedJson, rootPub, _paths.MachineId, devicePub);
+            if (verified.IsValid && verified.Snapshot is not null)
+            {
+                _permissions.ApplyPolicySnapshot(verified.Snapshot);
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(rootPriv);
+        }
+
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     private static void ValidateCommonInputs(

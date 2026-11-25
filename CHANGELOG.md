@@ -2,6 +2,21 @@
 
 Tất cả thay đổi đáng chú ý của dự án **Ez Company** được ghi lại tại đây theo chuẩn [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và [Semantic Versioning 2.0.0](https://semver.org/).
 
+## [0.2.0] - 2026-11-25 — UI Customization, Welcome Dashboard, P2P Tasks & Account Recovery
+
+### Added & Changed
+- **Giao diện chung tùy biến (`AppearanceSettingsService` + `AccountAndAppearanceView`):** Tùy chỉnh trực tiếp cỡ chữ (`11–20 pt`), độ rộng thẻ nội dung (`640–1600 px`), bo góc & khoảng đệm thẻ, độ rộng thanh điều hướng, màu chủ đề (Accent Color presets + mã Hex tùy chọn), chế độ Sáng/Tối, hiệu ứng nền (`Mica`/`Acrylic`/`Tabbed`/`None`) và độ trong suốt cửa sổ (`70%–100%` qua Win32 layered window không ảnh hưởng resize/backdrop), lưu bền vững theo từng `--profile`.
+- **Giao diện Chào mừng sau đăng nhập (`WelcomeDashboardView` + `VietnameseLunarCalendar`):**
+  - Lời chào `"Xin chào [Tên nhân viên]"` đặt tại góc trên bên trái cùng lịch **Dương lịch** và **Âm lịch Việt Nam (UTC+7, Can Chi)** tính toán 100% offline.
+  - Theo dõi **Task hôm nay (tự tạo)**, **Task được giao**, **Tiến độ hoàn thành (%)**, và **Lịch sử hoàn thành các task**.
+- **Đổi tên, Đổi mật khẩu & Giao việc P2P + Nhận bàn giao (`WorkTaskService` + `TaskManagementView` + EF Core Migration v2):**
+  - Cả Giám đốc lẫn Nhân viên đều có thể đổi họ tên hiển thị, tên đăng nhập và mật khẩu cục bộ (băm lại Argon2id + cập nhật `policy.lic`/đồng bộ tên tới Giám đốc).
+  - Bổ sung giao việc & nhận bàn giao kết quả (kèm tệp đính kèm Vault + kiểm chứng SHA-256 + lịch sử giao việc & nghiệm thu) hỗ trợ cả **Giám đốc ↔ Nhân viên** và **Nhân viên ↔ Nhân viên** qua P2P LAN có ký xác thực thiết bị + hàng đợi offline.
+- **Màn hình Đăng nhập căn giữa & Khôi phục / Cấp lại tài khoản (`MainWindow` + `ExecutiveDashboardView` + `AccountRecoveryManager`):**
+  - Căn giữa thẻ đăng nhập cho cả Giám đốc và Nhân viên.
+  - Nhân viên có nút **Yêu cầu cấp lại tài khoản / mật khẩu** gửi yêu cầu ký số thiết bị lên máy Giám đốc và nhận vé `PasswordResetTicket` ký số Ed25519 để đặt lại mật khẩu cục bộ (không truyền mật khẩu qua mạng LAN).
+  - Giám đốc có nút **Khôi phục tài khoản** bằng tệp `.recovery` Master Recovery Kit ngay trên màn hình đăng nhập.
+
 ## [0.1.0] - 2026-11-24 — Phase 1 MVP
 
 ### Added

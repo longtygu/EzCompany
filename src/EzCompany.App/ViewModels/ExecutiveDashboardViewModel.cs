@@ -9,6 +9,7 @@ using EzCompany.Core.Data.Entities;
 using EzCompany.Core.LanAgent;
 using EzCompany.Core.LanAgent.Models;
 using EzCompany.Core.LanAgent.Pairing;
+using EzCompany.Core.LanAgent.Recovery;
 using EzCompany.Core.Telemetry;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Win32;
@@ -30,37 +31,46 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     private readonly IDbContextFactory<AppDbContext> _appDbFactory;
     private readonly IDbContextFactory<TelemetryDbContext> _telDbFactory;
     private readonly PairingSessionManager _pairingManager;
+    private readonly AccountRecoveryManager _recoveryManager;
     private readonly DirectorLanClient _lanClient;
     private readonly DirectorFleetSyncService _fleetSync;
     private readonly DirectorTelemetryPullService _telemetryPull;
     private readonly ILocalStoragePaths _paths;
     private readonly ISessionContext _session;
     private readonly IAuditLogger _audit;
+    private readonly IEventBus _eventBus;
 
     public ExecutiveDashboardViewModel(
         IDbContextFactory<AppDbContext> appDbFactory,
         IDbContextFactory<TelemetryDbContext> telDbFactory,
         PairingSessionManager pairingManager,
+        AccountRecoveryManager recoveryManager,
         DirectorLanClient lanClient,
         DirectorFleetSyncService fleetSync,
         DirectorTelemetryPullService telemetryPull,
         ILocalStoragePaths paths,
         ISessionContext session,
-        IAuditLogger audit)
+        IAuditLogger audit,
+        IEventBus eventBus)
     {
         _appDbFactory = appDbFactory;
         _telDbFactory = telDbFactory;
         _pairingManager = pairingManager;
+        _recoveryManager = recoveryManager;
         _lanClient = lanClient;
         _fleetSync = fleetSync;
         _telemetryPull = telemetryPull;
         _paths = paths;
         _session = session;
         _audit = audit;
+        _eventBus = eventBus;
+
+        _eventBus.Subscribe<PasswordResetRequestedEvent>(_ => PasswordResetsRefreshRequested?.Invoke(this, EventArgs.Empty));
     }
 
     public ObservableCollection<PairedDeviceEntity> Workstations { get; } = [];
     public ObservableCollection<PendingPairingRequest> PendingPairings { get; } = [];
+    public ObservableCollection<PasswordResetRequestEntity> PendingPasswordResets { get; } = [];
     public ObservableCollection<AuditLogEntity> RecentAuditLogs { get; } = [];
     public ObservableCollection<AppUsageRecordEntity> TopAppUsages { get; } = [];
     public ObservableCollection<SnapshotTimelineItem> SnapshotTimeline { get; } = [];
@@ -92,13 +102,14 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     [ObservableProperty] private string _pairingToggleText = "Mở ghép đôi máy mới (tự đóng sau 5 phút)";
     [ObservableProperty] private string _pairingCountdownText = "Đang đóng";
     [ObservableProperty] private PendingPairingRequest? _selectedPairingRequest;
+    [ObservableProperty] private PasswordResetRequestEntity? _selectedPasswordReset;
     [ObservableProperty] private string _approveRole = CompanyRoles.Staff;
     [ObservableProperty] private bool _approveAccounting;
     [ObservableProperty] private bool _approveLegal;
     [ObservableProperty] private bool _approveOffice = true;
 
     // Release Governance
-    [ObservableProperty] private string _fleetMaxApprovedVersion = "0.1.0";
+    [ObservableProperty] private string _fleetMaxApprovedVersion = "0.2.0";
     [ObservableProperty] private string _fleetAllowedChannel = "stable";
 
     // Snapshot Viewer
@@ -109,6 +120,7 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
 
     public event EventHandler<string>? InspectDatabaseRequested;
+    public event EventHandler? PasswordResetsRefreshRequested;
 
     partial void OnApproveRoleChanged(string value)
     {
@@ -264,6 +276,7 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
 
             RefreshPendingPairingsList();
             RefreshPairingCountdown();
+            await RefreshPendingPasswordResetsAsync();
         }
         catch (Exception ex)
         {
@@ -336,6 +349,48 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
         _pairingManager.RejectRequest(SelectedPairingRequest.RequestId);
         StatusBanner = $"Đã từ chối yêu cầu của {SelectedPairingRequest.FullName}.";
         RefreshPendingPairingsList();
+    }
+
+    [RelayCommand]
+    public async Task RefreshPendingPasswordResetsAsync()
+    {
+        Guid? selectedId = SelectedPasswordReset?.RequestId;
+        IReadOnlyList<PasswordResetRequestEntity> list = await _recoveryManager.GetPendingRequestsAsync();
+        PendingPasswordResets.Clear();
+        foreach (PasswordResetRequestEntity item in list)
+        {
+            PendingPasswordResets.Add(item);
+        }
+
+        SelectedPasswordReset = PendingPasswordResets.FirstOrDefault(x => x.RequestId == selectedId)
+                                ?? PendingPasswordResets.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private async Task ApproveSelectedPasswordResetAsync()
+    {
+        if (SelectedPasswordReset is null)
+        {
+            StatusBanner = "Chưa chọn yêu cầu cấp lại mật khẩu cần duyệt.";
+            return;
+        }
+
+        await _recoveryManager.ApproveRequestAsync(SelectedPasswordReset.RequestId, _session.FullName);
+        StatusBanner = $"Đã cấp vé reset mật khẩu ký số cho {SelectedPasswordReset.FullName} (@{SelectedPasswordReset.Username}).";
+        await RefreshPendingPasswordResetsAsync();
+    }
+
+    [RelayCommand]
+    private async Task RejectSelectedPasswordResetAsync()
+    {
+        if (SelectedPasswordReset is null)
+        {
+            return;
+        }
+
+        await _recoveryManager.RejectRequestAsync(SelectedPasswordReset.RequestId, _session.FullName);
+        StatusBanner = $"Đã từ chối yêu cầu cấp lại mật khẩu của {SelectedPasswordReset.FullName}.";
+        await RefreshPendingPasswordResetsAsync();
     }
 
     [RelayCommand]

@@ -3,6 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  Title="{Binding WindowTitle}"
+                 FontSize="{DynamicResource AppFontSize}"
                  Width="1280"
                  Height="820"
                  MinWidth="1024"
@@ -68,7 +69,7 @@
         <!-- Main Split Workspace -->
         <Grid Grid.Row="3" Margin="12">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="{DynamicResource AppSidebarWidth}" />
                 <ColumnDefinition Width="12" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>

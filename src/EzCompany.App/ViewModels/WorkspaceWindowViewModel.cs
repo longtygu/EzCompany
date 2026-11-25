@@ -48,6 +48,10 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
             ActiveNoticeBanner = $"[{evt.SenderAdminName}] {evt.Title}: {evt.Message}";
             NoticeReceived?.Invoke(this, evt);
         });
+        _eventBus.Subscribe<UserProfileUpdatedEvent>(evt =>
+        {
+            UserSubtitle = $"Tài khoản: {evt.FullName} (@{evt.Username})  •  Vai trò: {evt.Role}";
+        });
     }
 
     public ObservableCollection<NavigationItemModel> NavigationItems { get; } = [];
@@ -98,11 +102,30 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
 
         NavigationItems.Add(new NavigationItemModel
         {
-            Key = "home",
-            Title = "Tổng quan Trạm",
-            Subtitle = "Trạng thái hồ sơ & giấy phép",
-            CreateContent = () => new WorkspaceHomeView { DataContext = this }
+            Key = "welcome",
+            Title = "Chào mừng & Công việc",
+            Subtitle = "Lịch Âm/Dương, Task & Tiến độ",
+            CreateContent = () =>
+            {
+                var view = (WelcomeDashboardView)_services.GetService(typeof(WelcomeDashboardView))!;
+                if (view.DataContext is WelcomeDashboardViewModel vm)
+                {
+                    vm.OpenTaskManagementRequested += (_, _) => OpenNavigationItem("core.tasks");
+                }
+                return view;
+            }
         });
+
+        if (!_permissions.IsLocked)
+        {
+            NavigationItems.Add(new NavigationItemModel
+            {
+                Key = "core.tasks",
+                Title = "Giao việc & Bàn giao",
+                Subtitle = "Giao việc P2P & Lịch sử",
+                CreateContent = () => _services.GetService(typeof(TaskManagementView))!
+            });
+        }
 
         if (_session.IsDirectorNode && !_permissions.IsLocked)
         {
@@ -151,6 +174,14 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
 
         NavigationItems.Add(new NavigationItemModel
         {
+            Key = "core.settings",
+            Title = "Tài khoản & Giao diện",
+            Subtitle = "Đổi mật khẩu, Cỡ chữ, Màu sắc",
+            CreateContent = () => _services.GetService(typeof(AccountAndAppearanceView))!
+        });
+
+        NavigationItems.Add(new NavigationItemModel
+        {
             Key = "core.updates",
             Title = "Cập nhật & Bảo trì",
             Subtitle = "Velopack + SafeMigration",
@@ -160,6 +191,15 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         NavigationItemModel? next = NavigationItems.FirstOrDefault(x => x.Key == previousKey)
                                     ?? NavigationItems.FirstOrDefault();
         SelectedNavItem = next;
+    }
+
+    public void OpenNavigationItem(string key)
+    {
+        NavigationItemModel? item = NavigationItems.FirstOrDefault(x => x.Key == key);
+        if (item is not null)
+        {
+            SelectedNavItem = item;
+        }
     }
 
     partial void OnSelectedNavItemChanged(NavigationItemModel? value)

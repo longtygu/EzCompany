@@ -50,7 +50,10 @@ public sealed class LanDiscoveryService : BackgroundService, ILanDiscoveryServic
         string PubKeyHash,
         int Port,
         bool PairingOpen,
-        string AppVersion);
+        string AppVersion,
+        string? UserFullName = null,
+        string? Username = null,
+        string? UserRole = null);
 
     public LanDiscoveryService(
         IDbContextFactory<AppDbContext> appDbFactory,
@@ -228,7 +231,10 @@ public sealed class LanDiscoveryService : BackgroundService, ILanDiscoveryServic
                     Port: port,
                     PairingOpen: map.TryGetValue("pairing_open", out string? po) && bool.TryParse(po, out bool b) && b,
                     AppVersion: map.GetValueOrDefault("app_version", "0.1.0"),
-                    LastSeenUtc: DateTimeOffset.UtcNow);
+                    LastSeenUtc: DateTimeOffset.UtcNow,
+                    UserFullName: map.GetValueOrDefault("user_fullname", string.Empty),
+                    Username: map.GetValueOrDefault("username", string.Empty),
+                    UserRole: map.GetValueOrDefault("user_role", string.Empty));
 
                 UpsertPeer(peer);
             }
@@ -298,7 +304,10 @@ public sealed class LanDiscoveryService : BackgroundService, ILanDiscoveryServic
                         beacon.Port,
                         beacon.PairingOpen,
                         beacon.AppVersion,
-                        DateTimeOffset.UtcNow));
+                        DateTimeOffset.UtcNow,
+                        beacon.UserFullName ?? string.Empty,
+                        beacon.Username ?? string.Empty,
+                        beacon.UserRole ?? string.Empty));
                 }
                 catch
                 {
@@ -351,6 +360,19 @@ public sealed class LanDiscoveryService : BackgroundService, ILanDiscoveryServic
         string nodeRole = company.IsDirectorNode ? "director" : "employee";
         string companyIdStr = company.CompanyId.ToString("D");
 
+        LocalUserEntity? localUser = await db.LocalUsers.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.IsActive, ct)
+            .ConfigureAwait(false);
+        string userFullName = _session.IsAuthenticated && !string.IsNullOrWhiteSpace(_session.FullName)
+            ? _session.FullName
+            : localUser?.FullName ?? string.Empty;
+        string username = _session.IsAuthenticated && !string.IsNullOrWhiteSpace(_session.Username)
+            ? _session.Username
+            : localUser?.Username ?? string.Empty;
+        string userRole = _session.IsAuthenticated && !string.IsNullOrWhiteSpace(_session.Role)
+            ? _session.Role
+            : localUser?.Role ?? (company.IsDirectorNode ? CompanyRoles.Director : CompanyRoles.Staff);
+
         // 1. Update mDNS profile
         lock (_advLock)
         {
@@ -372,6 +394,9 @@ public sealed class LanDiscoveryService : BackgroundService, ILanDiscoveryServic
                     profile.AddProperty("port", port.ToString());
                     profile.AddProperty("pairing_open", _pairingOpen ? "true" : "false");
                     profile.AddProperty("app_version", _session.CurrentAppVersion);
+                    profile.AddProperty("user_fullname", userFullName);
+                    profile.AddProperty("username", username);
+                    profile.AddProperty("user_role", userRole);
 
                     if (_currentProfile is not null)
                     {
@@ -400,7 +425,10 @@ public sealed class LanDiscoveryService : BackgroundService, ILanDiscoveryServic
                 pubKeyHash,
                 port,
                 _pairingOpen,
-                _session.CurrentAppVersion);
+                _session.CurrentAppVersion,
+                userFullName,
+                username,
+                userRole);
 
             byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
             using var udp = new UdpClient { EnableBroadcast = true };

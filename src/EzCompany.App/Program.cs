@@ -106,7 +106,7 @@ public static class Program
             };
 
             ThemeService theme = host.Services.GetRequiredService<ThemeService>();
-            theme.ApplyTheme(true);
+            theme.ApplyCurrentAppearance();
 
             MainWindow mainWindow = host.Services.GetRequiredService<MainWindow>();
             app.MainWindow = mainWindow;
@@ -165,12 +165,19 @@ public static class Program
                 RegisterModule(services, new LegalModule());
                 RegisterModule(services, new OfficeModule());
 
+                services.AddSingleton<AppearanceSettingsService>();
                 services.AddSingleton<ThemeService>();
                 services.AddSingleton<ReadOnlyDbInspectorService>();
                 services.AddTransient<MainWindowViewModel>();
                 services.AddTransient<MainWindow>();
                 services.AddTransient<WorkspaceWindowViewModel>();
                 services.AddTransient<WorkspaceWindow>();
+                services.AddTransient<WelcomeDashboardViewModel>();
+                services.AddTransient<WelcomeDashboardView>();
+                services.AddTransient<TaskManagementViewModel>();
+                services.AddTransient<TaskManagementView>();
+                services.AddTransient<AccountAndAppearanceViewModel>();
+                services.AddTransient<AccountAndAppearanceView>();
                 services.AddTransient<ExecutiveDashboardViewModel>();
                 services.AddTransient<ExecutiveDashboardView>();
                 services.AddTransient<DbInspectorViewModel>();

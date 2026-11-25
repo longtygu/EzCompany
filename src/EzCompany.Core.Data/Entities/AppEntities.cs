@@ -124,3 +124,72 @@ public sealed class OfficeDocumentRecordEntity
     public string CreatedByUsername { get; set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; set; }
 }
+
+public sealed class WorkTaskEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string TaskKind { get; set; } = "Self"; // Self | Assigned
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Priority { get; set; } = "Normal"; // Low | Normal | High | Urgent
+    public string Status { get; set; } = "Pending"; // Pending | InProgress | HandedOver | Completed | RevisionRequested
+
+    public string AssignerMachineId { get; set; } = string.Empty;
+    public string AssignerUsername { get; set; } = string.Empty;
+    public string AssignerFullName { get; set; } = string.Empty;
+    public string AssignerRole { get; set; } = string.Empty;
+
+    public string AssigneeMachineId { get; set; } = string.Empty;
+    public string AssigneeUsername { get; set; } = string.Empty;
+    public string AssigneeFullName { get; set; } = string.Empty;
+    public string AssigneeRole { get; set; } = string.Empty;
+
+    public DateTimeOffset? DueDateUtc { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+    public DateTimeOffset? CompletedAtUtc { get; set; }
+
+    public string HandoverNotes { get; set; } = string.Empty;
+    public string? HandoverFileName { get; set; }
+    public string? HandoverVaultPath { get; set; }
+    public string? HandoverFileSha256 { get; set; }
+    public DateTimeOffset? HandedOverAtUtc { get; set; }
+    public string ReviewNotes { get; set; } = string.Empty;
+
+    public string? PendingSyncTargetMachineId { get; set; }
+    public string? PendingSyncAction { get; set; }
+}
+
+public sealed class WorkTaskHistoryEntity
+{
+    public Guid Id { get; set; }
+    public Guid TaskId { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string ActorMachineId { get; set; } = string.Empty;
+    public string ActorUsername { get; set; } = string.Empty;
+    public string ActorFullName { get; set; } = string.Empty;
+    public string Note { get; set; } = string.Empty;
+    public string? AttachmentFileName { get; set; }
+    public DateTimeOffset TimestampUtc { get; set; }
+}
+
+public sealed class PasswordResetRequestEntity
+{
+    public Guid RequestId { get; set; }
+    public Guid CompanyId { get; set; }
+    public string MachineId { get; set; } = string.Empty;
+    public string DevicePublicKeyBase64 { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string? RequestedNewUsername { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public string State { get; set; } = "Pending"; // Pending | Approved | Rejected | Expired
+    public DateTimeOffset RequestedAtUtc { get; set; }
+    public DateTimeOffset ExpiresAtUtc { get; set; }
+    public DateTimeOffset? DecidedAtUtc { get; set; }
+    public string? DecidedByAdminName { get; set; }
+    public string? DecisionMessage { get; set; }
+    public string? SignedResetTicketJson { get; set; }
+    public string? RemoteIpAddress { get; set; }
+}

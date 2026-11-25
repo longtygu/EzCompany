@@ -193,7 +193,7 @@ public sealed class Milestone2LanAgentTests : IAsyncLifetime
         try { await writerTask; } catch (OperationCanceledException) { }
 
         Assert.NotEmpty(snap.Bytes);
-        Assert.Equal(1, snap.SchemaVersionHeader);
+        Assert.Equal(GenesisBootstrapService.CurrentAppSchemaVersion, snap.SchemaVersionHeader);
         Assert.Equal(Convert.ToHexString(SHA256.HashData(snap.Bytes)).ToLowerInvariant(), snap.Sha256Header);
 
         // Temp snapshot files must be cleaned up on employee machine

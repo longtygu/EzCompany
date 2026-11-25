@@ -10,7 +10,10 @@ public sealed record DiscoveredPeer(
     int Port,
     bool PairingOpen,
     string AppVersion,
-    DateTimeOffset LastSeenUtc)
+    DateTimeOffset LastSeenUtc,
+    string UserFullName = "",
+    string Username = "",
+    string UserRole = "")
 {
     public string Endpoint => $"{IpAddress}:{Port}";
     public bool IsDirector => string.Equals(NodeRole, "director", StringComparison.OrdinalIgnoreCase);

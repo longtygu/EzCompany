@@ -20,6 +20,10 @@ public partial class ExecutiveDashboardView : UserControl
             viewModel.RefreshPendingPairingsList();
         };
 
+        viewModel.PasswordResetsRefreshRequested += (_, _) =>
+        {
+            Dispatcher.InvokeAsync(async () => await viewModel.RefreshPendingPasswordResetsAsync());
+        };
         Loaded += async (_, _) =>
         {
             _countdownTimer.Start();

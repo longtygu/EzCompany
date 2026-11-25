@@ -26,6 +26,7 @@ public static class DataServiceCollectionExtensions
 
         services.AddSingleton<IAuditLogger, DatabaseAuditLogger>();
         services.AddSingleton<GenesisBootstrapService>();
+        services.AddSingleton<WorkTaskService>();
         return services;
     }
 }

@@ -8,6 +8,7 @@ using EzCompany.Core.LanAgent.Database;
 using EzCompany.Core.LanAgent.Discovery;
 using EzCompany.Core.LanAgent.Models;
 using EzCompany.Core.LanAgent.Pairing;
+using EzCompany.Core.LanAgent.Recovery;
 using EzCompany.Core.LanAgent.Security;
 using EzCompany.Core.LanAgent.Vault;
 using Microsoft.AspNetCore.Builder;
@@ -81,7 +82,10 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_rootServices.GetRequiredService<Ed25519Service>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<LocalKeyStore>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<PolicyEngine>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<PasswordResetTicketService>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<PairingSessionManager>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<AccountRecoveryManager>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<WorkTaskService>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<NonceReplayCache>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<VaultPathGuard>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<DatabaseSnapshotService>());
@@ -443,6 +447,169 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 snap.MachineId,
                 snap.CapturedAtUtc,
                 snap.FullImageEncryptedBlob));
+        });
+
+        // 9. Employee Account / Password Reset (Device-signed requests + Root-signed ticket approval)
+        app.MapPost("/api/v1/account-recovery/request", async (
+            HttpContext http,
+            AccountResetInitiateRequestDto req,
+            AccountRecoveryManager recoveryManager,
+            CancellationToken ct) =>
+        {
+            string devicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            string? remoteIp = http.Connection.RemoteIpAddress?.ToString();
+            (bool accepted, string? error, AccountResetInitiateResponseDto? resp) =
+                await recoveryManager.AcceptRequestAsync(req, devicePubB64, remoteIp, ct).ConfigureAwait(false);
+
+            return accepted
+                ? Results.Ok(resp)
+                : Results.Json(new { message = error }, statusCode: StatusCodes.Status403Forbidden);
+        });
+
+        app.MapGet("/api/v1/account-recovery/status/{requestId:guid}", async (
+            Guid requestId,
+            HttpContext http,
+            AccountRecoveryManager recoveryManager,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            AccountResetStatusResponseDto status =
+                await recoveryManager.GetStatusAsync(requestId, callerMachineId, ct).ConfigureAwait(false);
+            return Results.Ok(status);
+        });
+
+        // 10. Company Peer Directory & Profile Update (Device-signed)
+        app.MapGet("/api/v1/peers/directory", async (
+            IDbContextFactory<AppDbContext> appDbFactory,
+            CancellationToken ct) =>
+        {
+            await using AppDbContext db = await appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+            List<PairedDeviceEntity> devices = await db.PairedDevices.AsNoTracking()
+                .OrderBy(d => d.Role)
+                .ThenBy(d => d.FullName)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            List<PeerDirectoryEntryDto> result = devices.Select(d => new PeerDirectoryEntryDto(
+                d.MachineId,
+                d.Username,
+                d.FullName,
+                d.Role,
+                d.IsOnline,
+                !string.IsNullOrWhiteSpace(d.LastKnownIp) && d.LastKnownPort > 0
+                    ? $"{d.LastKnownIp}:{d.LastKnownPort}"
+                    : null)).ToList();
+
+            return Results.Ok(result);
+        });
+
+        app.MapPost("/api/v1/peers/profile-update", async (
+            HttpContext http,
+            ProfileUpdateNotificationDto dto,
+            IDbContextFactory<AppDbContext> appDbFactory,
+            IAuditLogger audit,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            if (!string.Equals(callerMachineId, dto.MachineId, StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Forbid();
+            }
+
+            await using AppDbContext db = await appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+            PairedDeviceEntity? dev = await db.PairedDevices
+                .FirstOrDefaultAsync(x => x.MachineId == callerMachineId, ct)
+                .ConfigureAwait(false);
+
+            if (dev is not null)
+            {
+                dev.Username = dto.Username.Trim().ToLowerInvariant();
+                dev.FullName = dto.FullName.Trim();
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                await audit.LogAsync("PEER_PROFILE_UPDATED", "core.lan", callerMachineId, $"{dev.Username} ({dev.FullName})", "Info", ct)
+                    .ConfigureAwait(false);
+            }
+
+            return Results.Ok(new { updated = true });
+        });
+
+        // 11. Peer-to-Peer Task Assignment & Handover Sync (Device-signed + Sender policy.lic verified against pinned RootPublicKey)
+        app.MapPost("/api/v1/tasks/sync", async (
+            HttpContext http,
+            TaskSyncPayloadDto dto,
+            LocalKeyStore keyStore,
+            PolicyEngine policyEngine,
+            WorkTaskService taskService,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            string callerDevicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            byte[]? pinnedRootPub = keyStore.LoadPinnedRootPublicKey();
+            if (pinnedRootPub is null || string.IsNullOrWhiteSpace(callerDevicePubB64))
+            {
+                return Results.Unauthorized();
+            }
+
+            byte[] callerDevicePub = Convert.FromBase64String(callerDevicePubB64);
+            PolicyVerificationResult verified = policyEngine.VerifyOffline(
+                dto.SenderSignedPolicyJson,
+                pinnedRootPub,
+                callerMachineId,
+                callerDevicePub,
+                commitClockGuard: false);
+
+            if (!verified.IsValid || verified.Snapshot is null)
+            {
+                return Results.Json(
+                    new TaskSyncAckDto(false, $"Giấy phép policy.lic của máy gửi không hợp lệ: {verified.Message}"),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            byte[]? attachmentBytes = null;
+            if (!string.IsNullOrWhiteSpace(dto.HandoverFileBase64))
+            {
+                attachmentBytes = Convert.FromBase64String(dto.HandoverFileBase64);
+            }
+
+            var incoming = new WorkTaskEntity
+            {
+                Id = dto.TaskId,
+                CompanyId = dto.CompanyId,
+                TaskKind = dto.TaskKind,
+                Title = dto.Title,
+                Description = dto.Description,
+                Priority = dto.Priority,
+                Status = dto.Status,
+                AssignerMachineId = dto.AssignerMachineId,
+                AssignerUsername = dto.AssignerUsername,
+                AssignerFullName = dto.AssignerFullName,
+                AssignerRole = dto.AssignerRole,
+                AssigneeMachineId = dto.AssigneeMachineId,
+                AssigneeUsername = dto.AssigneeUsername,
+                AssigneeFullName = dto.AssigneeFullName,
+                AssigneeRole = dto.AssigneeRole,
+                DueDateUtc = dto.DueDateUtc,
+                CreatedAtUtc = dto.CreatedAtUtc,
+                UpdatedAtUtc = dto.UpdatedAtUtc,
+                CompletedAtUtc = dto.CompletedAtUtc,
+                HandoverNotes = dto.HandoverNotes,
+                HandoverFileName = dto.HandoverFileName,
+                HandoverFileSha256 = dto.HandoverFileSha256,
+                HandedOverAtUtc = dto.HandedOverAtUtc,
+                ReviewNotes = dto.ReviewNotes
+            };
+
+            await taskService.UpsertIncomingSyncedTaskAsync(
+                incoming,
+                attachmentBytes,
+                callerMachineId,
+                verified.Snapshot.Username,
+                verified.Snapshot.FullName,
+                dto.SyncAction,
+                dto.HistoryNote,
+                ct).ConfigureAwait(false);
+
+            return Results.Ok(new TaskSyncAckDto(true, "Đã nhận và lưu công việc đồng bộ qua LAN."));
         });
     }
 
