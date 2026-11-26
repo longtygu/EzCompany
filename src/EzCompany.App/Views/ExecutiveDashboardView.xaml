@@ -26,25 +26,25 @@
 
             <!-- 1. KPI Summary Cards -->
             <UniformGrid Columns="4" Margin="0,0,0,16">
-                <Border Padding="14" Margin="0,0,8,0" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <Border Padding="{DynamicResource AppCardPadding}" Margin="0,0,8,0" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                     <StackPanel>
                         <TextBlock Text="Máy Online / Tổng" Opacity="0.7" FontSize="12" />
                         <TextBlock Text="{Binding KpiOnlineText}" FontSize="24" FontWeight="Bold" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>
-                <Border Padding="14" Margin="4,0" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <Border Padding="{DynamicResource AppCardPadding}" Margin="4,0" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                     <StackPanel>
                         <TextBlock Text="Tổng giờ Active hôm nay" Opacity="0.7" FontSize="12" />
                         <TextBlock Text="{Binding KpiActiveHoursText}" FontSize="24" FontWeight="Bold" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>
-                <Border Padding="14" Margin="4,0" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <Border Padding="{DynamicResource AppCardPadding}" Margin="4,0" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                     <StackPanel>
                         <TextBlock Text="Dung lượng DB + Vault LAN" Opacity="0.7" FontSize="12" />
                         <TextBlock Text="{Binding KpiStorageText}" FontSize="24" FontWeight="Bold" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>
-                <Border Padding="14" Margin="8,0,0,0" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}" ToolTip="{Binding KpiAlertDetails}">
+                <Border Padding="{DynamicResource AppCardPadding}" Margin="8,0,0,0" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}" ToolTip="{Binding KpiAlertDetails}">
                     <StackPanel>
                         <TextBlock Text="Cảnh báo đỏ (24h)" Opacity="0.7" FontSize="12" />
                         <TextBlock Text="{Binding KpiRedAlertsText}" FontSize="24" FontWeight="Bold" Margin="0,4,0,0" />
@@ -54,7 +54,7 @@
             </UniformGrid>
 
             <!-- 2. LAN Workstations Grid + 1-Click Actions -->
-            <Border Padding="14" Margin="0,0,0,16" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <Border Padding="{DynamicResource AppCardPadding}" Margin="0,0,0,16" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                 <StackPanel>
                     <TextBlock Text="2. Lưới Máy trạm LAN &amp; Thao tác 1-Click" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
                     <DataGrid ItemsSource="{Binding Workstations}"
@@ -141,7 +141,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Padding="14" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <Border Grid.Column="0" Padding="{DynamicResource AppCardPadding}" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                     <StackPanel>
                         <TextBlock Text="3a. Nhật ký AuditLogs" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
                         <DataGrid ItemsSource="{Binding RecentAuditLogs}" AutoGenerateColumns="False" IsReadOnly="True" Height="170">
@@ -154,7 +154,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="2" Padding="14" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <Border Grid.Column="2" Padding="{DynamicResource AppCardPadding}" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                     <StackPanel>
                         <TextBlock Text="3b. Thời lượng ứng dụng (Đã lọc riêng tư)" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
                         <DataGrid ItemsSource="{Binding TopAppUsages}" AutoGenerateColumns="False" IsReadOnly="True" Height="170">
@@ -170,7 +170,7 @@
             </Grid>
 
             <!-- 4. Encrypted Snapshot Timeline (Director Cache) -->
-            <Border Padding="14" Margin="0,0,0,16" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <Border Padding="{DynamicResource AppCardPadding}" Margin="0,0,0,16" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                 <StackPanel>
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
@@ -209,7 +209,7 @@
             </Border>
 
             <!-- 5. SAS Pairing Approval & Release Governance Center -->
-            <Border Padding="14" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <Border Padding="{DynamicResource AppCardPadding}" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -264,7 +264,7 @@
             </Border>
 
             <!-- 6. Employee Password / Account Reset Requests -->
-            <Border Padding="14" Margin="0,16,0,0" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <Border Padding="{DynamicResource AppCardPadding}" Margin="0,16,0,0" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                 <StackPanel>
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>

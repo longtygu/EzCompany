@@ -26,7 +26,11 @@
             <Thickness x:Key="AppCardPadding">16</Thickness>
             <GridLength x:Key="AppSidebarWidth">260</GridLength>
             <SolidColorBrush x:Key="AppAccentBrush" Color="#0078D4" />
-            <SolidColorBrush x:Key="AppCardBackgroundBrush" Color="#252830" />
+            <SolidColorBrush x:Key="AppWindowBackgroundBrush" Color="#1B1D22" />
+            <SolidColorBrush x:Key="AppPanelBackgroundBrush" Color="#22252C" />
+            <SolidColorBrush x:Key="AppCardBackgroundBrush" Color="#2A2D35" />
+            <SolidColorBrush x:Key="AppCardInnerBackgroundBrush" Color="#33373F" />
+            <SolidColorBrush x:Key="AppCardBorderBrush" Color="#29FFFFFF" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

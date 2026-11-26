@@ -704,6 +704,7 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 SenderUsername = verified.Snapshot!.Username,
                 SenderFullName = verified.Snapshot.FullName,
                 Content = dto.Content,
+                MessageType = string.IsNullOrWhiteSpace(dto.MessageType) ? "Text" : dto.MessageType,
                 AttachmentFileName = dto.AttachmentFileName,
                 AttachmentSha256 = dto.AttachmentSha256,
                 AttachmentSizeBytes = dto.AttachmentSizeBytes,
@@ -746,7 +747,7 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                     c.PinnedTaskId, c.PinnedTaskSummary,
                     m.Id, m.SenderMachineId, m.SenderUsername, m.SenderFullName,
                     m.Content, m.AttachmentFileName, m.AttachmentSha256, b64, m.AttachmentSizeBytes,
-                    m.LinkedTaskId, m.SentAtUtc, localPolicy));
+                    m.LinkedTaskId, m.SentAtUtc, localPolicy, m.MessageType));
             }
 
             return Results.Ok(new ChatHistoryPullResponseDto(items));
@@ -888,6 +889,9 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 CheckInUtc = dto.CheckInUtc,
                 CheckOutUtc = dto.CheckOutUtc,
                 WorkedHours = dto.WorkedHours,
+                OvertimeHours = dto.OvertimeHours,
+                WorkDayUnits = dto.WorkDayUnits,
+                IsManualEntry = dto.IsManualEntry,
                 Status = dto.Status,
                 Notes = dto.Notes,
                 UpdatedAtUtc = dto.UpdatedAtUtc

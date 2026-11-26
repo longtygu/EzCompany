@@ -85,6 +85,8 @@ public sealed class Milestone6UpgradesTests : IAsyncLifetime
             CardPadding = 2,
             SidebarWidth = 900,
             WindowOpacity = 0.25,
+            CardOpacity = 0.1,
+            CardTintStrength = 0.9,
             BackdropType = "Acrylic"
         });
 
@@ -95,13 +97,17 @@ public sealed class Milestone6UpgradesTests : IAsyncLifetime
         Assert.Equal(20.0, applied.CardCornerRadius);
         Assert.Equal(8.0, applied.CardPadding);
         Assert.Equal(340.0, applied.SidebarWidth);
-        Assert.Equal(0.70, applied.WindowOpacity);
+        Assert.Equal(0.30, applied.WindowOpacity);
+        Assert.Equal(0.40, applied.CardOpacity);
+        Assert.Equal(0.40, applied.CardTintStrength);
         Assert.Equal("Acrylic", applied.BackdropType);
 
         var svc2 = new AppearanceSettingsService(paths);
         Assert.Equal("#107C10", svc2.Current.AccentColorHex);
         Assert.Equal("Acrylic", svc2.Current.BackdropType);
-        Assert.Equal(0.70, svc2.Current.WindowOpacity);
+        Assert.Equal(0.30, svc2.Current.WindowOpacity);
+        Assert.Equal(0.40, svc2.Current.CardOpacity);
+        Assert.Equal(0.40, svc2.Current.CardTintStrength);
 
         AppearanceSettings reset = svc2.ResetToDefaults();
         Assert.True(reset.IsDarkMode);

@@ -16,9 +16,9 @@
                     <StackPanel Margin="0,14,0,0">
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                Background="{DynamicResource AppCardBackgroundBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,12">
                                     <Grid.ColumnDefinitions>
@@ -41,8 +41,11 @@
                                     <StackPanel Grid.Column="0">
                                         <CheckBox Content="Chế độ Nền tối (Dark Mode)" IsChecked="{Binding IsDarkMode}" Margin="0,0,0,10" />
                                         <TextBlock Text="Chất liệu nền cửa sổ (Material)" Margin="0,0,0,4" />
-                                        <ComboBox ItemsSource="{Binding AvailableBackdrops}" SelectedItem="{Binding BackdropType}" />
-                                        <TextBlock Text="Lưu ý: Khi đặt độ trong suốt &lt; 100%, hệ thống tự dùng lớp phủ trong suốt an toàn để không sai màu nền."
+                                        <ComboBox ItemsSource="{Binding BackdropOptions}"
+                                                  DisplayMemberPath="Label"
+                                                  SelectedValuePath="Key"
+                                                  SelectedValue="{Binding BackdropType}" />
+                                        <TextBlock Text="Kính mờ/Acrylic/Mica hiện rõ khi giảm 'Độ đậm nền cửa sổ' dưới 100%. Windows 10 không hỗ trợ Mica/Tabbed nên tự dùng Kính mờ; Acrylic trên Windows 10 có thể hơi giật khi kéo cửa sổ."
                                                    FontSize="11"
                                                    Opacity="0.65"
                                                    TextWrapping="Wrap"
@@ -105,8 +108,14 @@
                                         <TextBlock Text="{Binding CardPadding, StringFormat='Khoảng đệm bên trong thẻ: {0:F0} px'}" Margin="0,4,0,2" />
                                         <Slider Minimum="8" Maximum="28" TickFrequency="2" IsSnapToTickEnabled="True" Value="{Binding CardPadding}" Margin="0,0,0,8" />
 
-                                        <TextBlock Text="{Binding WindowOpacity, StringFormat='Độ trong suốt cửa sổ: {0:P0}'}" Margin="0,4,0,2" />
-                                        <Slider Minimum="0.70" Maximum="1.00" TickFrequency="0.02" IsSnapToTickEnabled="True" Value="{Binding WindowOpacity}" />
+                                        <TextBlock Text="{Binding WindowOpacity, StringFormat='Độ đậm nền cửa sổ: {0:P0} (giảm để trong suốt)'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="0.30" Maximum="1.00" TickFrequency="0.05" IsSnapToTickEnabled="True" Value="{Binding WindowOpacity}" Margin="0,0,0,8" />
+
+                                        <TextBlock Text="{Binding CardOpacity, StringFormat='Độ đậm của thẻ: {0:P0}'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="0.40" Maximum="1.00" TickFrequency="0.05" IsSnapToTickEnabled="True" Value="{Binding CardOpacity}" Margin="0,0,0,8" />
+
+                                        <TextBlock Text="{Binding CardTintStrength, StringFormat='Pha màu chủ đề vào thẻ: {0:P0}'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="0.00" Maximum="0.40" TickFrequency="0.02" IsSnapToTickEnabled="True" Value="{Binding CardTintStrength}" />
                                     </StackPanel>
                                 </Grid>
 
@@ -122,16 +131,16 @@
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 Margin="0,0,0,16"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                Background="{DynamicResource AppCardBackgroundBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
                                 <TextBlock Text="Logo Doanh nghiệp (Đồng bộ tới màn hình Đăng nhập &amp; Tổng quan của tất cả máy)"
                                            FontSize="{DynamicResource AppFontSizeHeading}"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,10" />
                                 <StackPanel Orientation="Horizontal">
-                                    <Border Padding="6" CornerRadius="8" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" Margin="0,0,16,0">
+                                    <Border Padding="6" CornerRadius="8" Background="{DynamicResource AppCardInnerBackgroundBrush}" Margin="0,0,16,0">
                                         <Image Source="{Binding CompanyLogoPreview}" Width="80" Height="80" Stretch="Uniform" />
                                     </Border>
                                     <StackPanel VerticalAlignment="Center">
@@ -147,9 +156,9 @@
 
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                Background="{DynamicResource AppCardBackgroundBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
                                 <TextBlock Text="Đổi Tên hiển thị, Tên đăng nhập &amp; Mật khẩu cục bộ"
                                            FontSize="{DynamicResource AppFontSizeHeading}"
@@ -207,7 +216,7 @@
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 Margin="0,0,0,16"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                Background="{DynamicResource AppCardBackgroundBrush}">
                             <StackPanel>
                                 <TextBlock Text="{Binding UpdatesVm.VersionText}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding UpdatesVm.RepoUrlText}" Opacity="0.7" Margin="0,4,0,8" />
@@ -222,7 +231,7 @@
 
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                Background="{DynamicResource AppCardBackgroundBrush}">
                             <StackPanel>
                                 <TextBlock Text="Thông tin Giấy phép &amp; Sao lưu trước Migration" FontWeight="SemiBold" Margin="0,0,0,6" />
                                 <TextBlock Text="{Binding PolicySummary}" Margin="0,0,0,4" TextWrapping="Wrap" />
@@ -241,7 +250,7 @@
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 Margin="0,0,0,16"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                Background="{DynamicResource AppCardBackgroundBrush}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
@@ -271,7 +280,7 @@
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 Margin="0,0,0,16"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                Background="{DynamicResource AppCardBackgroundBrush}">
                             <StackPanel>
                                 <TextBlock Text="Báo lỗi &amp; Đóng gói Nhật ký phân tích (.zip)" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="SemiBold" Margin="0,0,0,8" />
                                 <ui:TextBox Text="{Binding BugReportTitle, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Tiêu đề lỗi gặp phải..." Margin="0,0,0,8" />
@@ -286,7 +295,7 @@
                         <!-- Live Log History -->
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                Background="{DynamicResource AppCardBackgroundBrush}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>

@@ -169,7 +169,8 @@ public sealed record ChatSyncEnvelopeDto(
     long AttachmentSizeBytes,
     Guid? LinkedTaskId,
     DateTimeOffset SentAtUtc,
-    string SenderSignedPolicyJson);
+    string SenderSignedPolicyJson,
+    string MessageType = "Text");
 
 public sealed record ChatHistoryPullResponseDto(IReadOnlyList<ChatSyncEnvelopeDto> Messages);
 
@@ -206,7 +207,10 @@ public sealed record AttendanceSyncDto(
     string Status,
     string Notes,
     DateTimeOffset UpdatedAtUtc,
-    string SenderSignedPolicyJson);
+    string SenderSignedPolicyJson,
+    double OvertimeHours = 0.0,
+    double WorkDayUnits = 1.0,
+    bool IsManualEntry = false);
 
 public sealed record AccountResetInitiateRequestDto(
     string MachineId,

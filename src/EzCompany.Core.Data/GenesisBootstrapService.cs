@@ -19,7 +19,7 @@ public sealed record AuthenticationResult(
 /// </summary>
 public sealed class GenesisBootstrapService
 {
-    public const int CurrentAppSchemaVersion = 3;
+    public const int CurrentAppSchemaVersion = 4;
 
     private readonly IDbContextFactory<AppDbContext> _appDbFactory;
     private readonly ILocalStoragePaths _paths;

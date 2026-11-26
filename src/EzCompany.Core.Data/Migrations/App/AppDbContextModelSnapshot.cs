@@ -268,6 +268,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("Content").IsRequired().HasColumnType("TEXT");
             b.Property<Guid>("ConversationId").HasColumnType("TEXT");
             b.Property<Guid?>("LinkedTaskId").HasColumnType("TEXT");
+            b.Property<string>("MessageType").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
             b.Property<string>("PendingSyncTargetsJson").HasColumnType("TEXT");
             b.Property<string>("SenderFullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
             b.Property<string>("SenderMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
@@ -304,6 +305,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
         modelBuilder.Entity("EzCompany.Core.Data.Entities.EmployeeProfileEntity", b =>
         {
             b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<decimal>("AllowanceVnd").HasColumnType("TEXT");
+            b.Property<decimal>("BaseSalaryVnd").HasColumnType("TEXT");
             b.Property<Guid>("CompanyId").HasColumnType("TEXT");
             b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
             b.Property<string>("Department").IsRequired().HasColumnType("TEXT");
@@ -311,6 +314,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("EmployeeCode").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
             b.Property<string>("EmploymentStatus").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
             b.Property<string>("FullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<decimal>("InsuranceDeductionVnd").HasColumnType("TEXT");
             b.Property<long>("JoinDateUtc").HasColumnType("INTEGER");
             b.Property<string>("LinkedMachineId").HasColumnType("TEXT");
             b.Property<string>("LinkedUsername").HasColumnType("TEXT");
@@ -319,6 +323,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("Phone").IsRequired().HasColumnType("TEXT");
             b.Property<string>("PositionTitle").IsRequired().HasColumnType("TEXT");
             b.Property<string>("RolesCsv").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<double>("StandardWorkDaysPerMonth").HasColumnType("REAL");
             b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
             b.HasKey("Id");
             b.HasIndex("EmployeeCode").IsUnique();
@@ -336,10 +341,13 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("EmployeeCode").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
             b.Property<string>("EmployeeName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
             b.Property<Guid>("EmployeeProfileId").HasColumnType("TEXT");
+            b.Property<bool>("IsManualEntry").HasColumnType("INTEGER");
             b.Property<string>("MachineId").IsRequired().HasColumnType("TEXT");
             b.Property<string>("Notes").IsRequired().HasColumnType("TEXT");
+            b.Property<double>("OvertimeHours").HasColumnType("REAL");
             b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
             b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.Property<double>("WorkDayUnits").HasColumnType("REAL");
             b.Property<double>("WorkedHours").HasColumnType("REAL");
             b.HasKey("Id");
             b.HasIndex("DateKey");

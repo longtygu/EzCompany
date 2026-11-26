@@ -5,7 +5,7 @@
              x:Name="ChatRoot">
     <Grid Margin="16">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="290" />
+            <ColumnDefinition Width="300" />
             <ColumnDefinition Width="14" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
@@ -14,7 +14,9 @@
         <Border Grid.Column="0"
                 Padding="{DynamicResource AppCardPadding}"
                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                Background="{DynamicResource AppCardBackgroundBrush}"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource AppCardBorderBrush}">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                     <Grid>
@@ -22,7 +24,10 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Chat nội bộ P2P" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
+                        <StackPanel>
+                            <TextBlock Text="Chat nội bộ P2P" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
+                            <TextBlock Text="● Tự động cập nhật 1s" FontSize="11" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" />
+                        </StackPanel>
                         <ui:Button Grid.Column="1" Content="Truy xuất LAN" Command="{Binding ReversePullHistoryFromLanCommand}" ToolTip="Kéo ngược lịch sử tin nhắn &amp; file từ các máy LAN" />
                     </Grid>
 
@@ -47,7 +52,7 @@
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
                     <TextBlock Text="Tạo nhóm chat mới" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.75" Margin="0,0,0,4" />
                     <ui:TextBox Text="{Binding NewGroupName, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Tên nhóm (vd: Kế toán - Pháp chế)..." Margin="0,0,0,6" />
-                    <ListBox ItemsSource="{Binding GroupMemberChoices}" MaxHeight="95" Margin="0,0,0,6">
+                    <ListBox ItemsSource="{Binding GroupMemberChoices}" MaxHeight="90" Margin="0,0,0,6">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding FullName}" />
@@ -60,21 +65,47 @@
                 <ListBox ItemsSource="{Binding Conversations}" SelectedItem="{Binding SelectedConversation}" BorderThickness="0" Background="Transparent">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="4,6">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding ConversationType}" FontSize="11" Opacity="0.65" />
-                            </StackPanel>
+                            <Grid Margin="4,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding ConversationType}" FontSize="11" Opacity="0.65" Margin="0,0,8,0" />
+                                        <TextBlock Text="{Binding LastUpdatedLocal}" FontSize="11" Opacity="0.55" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Column="1"
+                                        MinWidth="22"
+                                        Height="22"
+                                        Padding="6,2"
+                                        CornerRadius="11"
+                                        Background="{DynamicResource AppAccentBrush}"
+                                        VerticalAlignment="Center"
+                                        Visibility="{Binding HasUnread, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding UnreadCount}"
+                                               Foreground="White"
+                                               FontSize="11"
+                                               FontWeight="Bold"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
             </DockPanel>
         </Border>
 
-        <!-- Right Column: Pinned Task + Messages + Composer -->
+        <!-- Right Column: Pinned Task + Messages + Sticker Tray + Composer -->
         <Border Grid.Column="2"
                 Padding="{DynamicResource AppCardPadding}"
                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                Background="{DynamicResource AppCardBackgroundBrush}"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource AppCardBorderBrush}">
             <DockPanel>
                 <!-- Header & Pinned WorkTask Bar -->
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -94,7 +125,7 @@
                     <Border Padding="10,8"
                             Margin="0,0,0,8"
                             CornerRadius="8"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            Background="{DynamicResource AppCardInnerBackgroundBrush}"
                             BorderThickness="1"
                             BorderBrush="{DynamicResource AppAccentBrush}"
                             Visibility="{Binding SelectedConversation.PinnedTaskSummary, Converter={StaticResource NotEmptyToVis}}">
@@ -122,8 +153,78 @@
                     </Grid>
                 </StackPanel>
 
-                <!-- Bottom Message Composer -->
+                <!-- Bottom Message Composer & Custom Sticker Tray -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                    <!-- Custom Sticker Picker Tray -->
+                    <Border Padding="10"
+                            Margin="0,0,0,8"
+                            CornerRadius="10"
+                            Background="{DynamicResource AppCardInnerBackgroundBrush}"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource AppCardBorderBrush}"
+                            Visibility="{Binding IsStickerTrayOpen, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Bộ Sticker Tùy chỉnh (Bấm để gửi ngay)" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <ui:Button Grid.Column="1" Appearance="Primary" Content="+ Thêm Sticker..." Command="{Binding AddCustomStickerCommand}" Padding="10,5" />
+                            </Grid>
+                            <ScrollViewer MaxHeight="185" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Stickers}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,8,8"
+                                                    Padding="6"
+                                                    Width="90"
+                                                    CornerRadius="8"
+                                                    Background="{DynamicResource AppCardBackgroundBrush}"
+                                                    BorderThickness="1"
+                                                    BorderBrush="{DynamicResource AppCardBorderBrush}">
+                                                <Grid>
+                                                    <Button Background="Transparent"
+                                                            BorderThickness="0"
+                                                            Padding="0"
+                                                            Cursor="Hand"
+                                                            Command="{Binding DataContext.SendStickerCommand, ElementName=ChatRoot}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="{Binding Name}">
+                                                        <StackPanel HorizontalAlignment="Center">
+                                                            <Image Source="{Binding PreviewImage}" Width="64" Height="64" Stretch="Uniform" />
+                                                            <TextBlock Text="{Binding Name}"
+                                                                       FontSize="11"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       HorizontalAlignment="Center"
+                                                                       Margin="0,4,0,0" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Content="✕"
+                                                            Width="20"
+                                                            Height="20"
+                                                            Padding="0"
+                                                            FontSize="10"
+                                                            HorizontalAlignment="Right"
+                                                            VerticalAlignment="Top"
+                                                            Opacity="0.7"
+                                                            ToolTip="Xóa sticker này"
+                                                            Command="{Binding DataContext.DeleteCustomStickerCommand, ElementName=ChatRoot}"
+                                                            CommandParameter="{Binding}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Text="{Binding DraftAttachmentPath, StringFormat='Tệp đính kèm: {0}'}"
                                FontSize="11"
                                Opacity="0.8"
@@ -132,45 +233,117 @@
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="8" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="8" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <ui:Button Grid.Column="0" Content="📎 Đính kèm" Command="{Binding BrowseAttachmentCommand}" />
-                        <ui:TextBox Grid.Column="2" Text="{Binding MessageDraft, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Nhập tin nhắn trao đổi nội bộ..." />
-                        <ui:Button Grid.Column="4" Appearance="Primary" Content="Gửi tin nhắn" Command="{Binding SendMessageCommand}" />
+                        <ui:Button Grid.Column="0" Content="📎 Tệp" Command="{Binding BrowseAttachmentCommand}" />
+                        <ui:Button Grid.Column="2" Content="☺ Sticker" Command="{Binding ToggleStickerTrayCommand}" />
+                        <ui:TextBox x:Name="MessageInputBox"
+                                    Grid.Column="4"
+                                    Text="{Binding MessageDraft, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="Nhập tin nhắn (nhấn Enter để gửi, Shift+Enter xuống dòng)..."
+                                    AcceptsReturn="True"
+                                    PreviewKeyDown="MessageInputBox_PreviewKeyDown" />
+                        <ui:Button Grid.Column="6" Appearance="Primary" Content="Gửi tin nhắn" Command="{Binding SendMessageCommand}" />
                     </Grid>
                 </StackPanel>
 
-                <!-- Message Stream -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <!-- Message Stream (Left/Right Chat Bubbles + Stickers) -->
+                <ScrollViewer x:Name="MessageScrollViewer" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
                     <ItemsControl ItemsSource="{Binding Messages}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Margin="0,0,0,8"
-                                        Padding="10,8"
-                                        CornerRadius="8"
-                                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
-                                    <StackPanel>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding SenderFullName}" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding SentTimeLocal}" FontSize="11" Opacity="0.65" />
-                                        </Grid>
-                                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding Content, Converter={StaticResource NotEmptyToVis}}" />
-                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasAttachment, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="{Binding AttachmentFileName, StringFormat='📎 {0}'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
-                                            <ui:Button Content="Mở / Tải ngược từ LAN"
-                                                       Padding="8,4"
-                                                       Command="{Binding DataContext.OpenOrRetrieveAttachmentCommand, ElementName=ChatRoot}"
-                                                       CommandParameter="{Binding}" />
+                                <Grid Margin="0,0,0,10">
+                                    <!-- Peer message bubble (Left) -->
+                                    <Grid HorizontalAlignment="Left"
+                                          MaxWidth="560"
+                                          Visibility="{Binding IsOtherMessage, Converter={StaticResource BoolToVis}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="36" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0"
+                                                Width="36"
+                                                Height="36"
+                                                CornerRadius="18"
+                                                VerticalAlignment="Top"
+                                                Background="{DynamicResource AppAccentBrush}">
+                                            <TextBlock Text="{Binding SenderInitials}"
+                                                       Foreground="White"
+                                                       FontWeight="Bold"
+                                                       FontSize="12"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+                                        <Border Grid.Column="2"
+                                                Padding="12,9"
+                                                CornerRadius="4,12,12,12"
+                                                Background="{DynamicResource AppCardInnerBackgroundBrush}"
+                                                BorderThickness="1"
+                                                BorderBrush="{DynamicResource AppCardBorderBrush}">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                    <TextBlock Text="{Binding SenderFullName}" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" Margin="0,0,10,0" />
+                                                    <TextBlock Text="{Binding SentTimeLocal}" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                                <Image Source="{Binding StickerImage}"
+                                                       Width="128"
+                                                       Height="128"
+                                                       Stretch="Uniform"
+                                                       HorizontalAlignment="Left"
+                                                       Visibility="{Binding IsSticker, Converter={StaticResource BoolToVis}}" />
+                                                <TextBlock Text="{Binding Content}"
+                                                           TextWrapping="Wrap"
+                                                           Visibility="{Binding IsSticker, Converter={StaticResource InvBoolToVis}}" />
+                                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasFileAttachment, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="{Binding AttachmentFileName, StringFormat='📎 {0}'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
+                                                    <ui:Button Content="Mở / Tải ngược từ LAN"
+                                                               Padding="8,4"
+                                                               Command="{Binding DataContext.OpenOrRetrieveAttachmentCommand, ElementName=ChatRoot}"
+                                                               CommandParameter="{Binding}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Own message bubble (Right) -->
+                                    <Border HorizontalAlignment="Right"
+                                            MaxWidth="560"
+                                            Padding="12,9"
+                                            CornerRadius="12,4,12,12"
+                                            Background="{DynamicResource AppCardInnerBackgroundBrush}"
+                                            BorderThickness="1.5"
+                                            BorderBrush="{DynamicResource AppAccentBrush}"
+                                            Visibility="{Binding IsOwnMessage, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,4">
+                                                <TextBlock Text="Bạn" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" Margin="0,0,10,0" />
+                                                <TextBlock Text="{Binding SentTimeLocal}" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <Image Source="{Binding StickerImage}"
+                                                   Width="128"
+                                                   Height="128"
+                                                   Stretch="Uniform"
+                                                   HorizontalAlignment="Right"
+                                                   Visibility="{Binding IsSticker, Converter={StaticResource BoolToVis}}" />
+                                            <TextBlock Text="{Binding Content}"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding IsSticker, Converter={StaticResource InvBoolToVis}}" />
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0" Visibility="{Binding HasFileAttachment, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="{Binding AttachmentFileName, StringFormat='📎 {0}'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
+                                                <ui:Button Content="Mở tệp"
+                                                           Padding="8,4"
+                                                           Command="{Binding DataContext.OpenOrRetrieveAttachmentCommand, ElementName=ChatRoot}"
+                                                           CommandParameter="{Binding}" />
+                                            </StackPanel>
                                         </StackPanel>
-                                    </StackPanel>
-                                </Border>
+                                    </Border>
+                                </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

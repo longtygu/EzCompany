@@ -33,9 +33,9 @@
             <Border Padding="{DynamicResource AppCardPadding}"
                     Margin="0,0,0,16"
                     CornerRadius="{DynamicResource AppCardCornerRadius}"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    Background="{DynamicResource AppCardInnerBackgroundBrush}"
                     BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                    BorderBrush="{DynamicResource AppCardBorderBrush}">
                 <StackPanel>
                     <TextBlock Text="Tạo &amp; Giao công việc mới (Giám đốc / Nhân viên giao việc cho nhau)"
                                FontSize="{DynamicResource AppFontSizeHeading}"
@@ -133,9 +133,9 @@
 
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                Background="{DynamicResource AppCardInnerBackgroundBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
                                 <TextBlock Text="Gửi bàn giao kết quả cho công việc đang chọn" FontWeight="SemiBold" Margin="0,0,0,8" />
                                 <ui:TextBox Text="{Binding HandoverNotes, UpdateSourceTrigger=PropertyChanged}"
@@ -182,9 +182,9 @@
 
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                Background="{DynamicResource AppCardInnerBackgroundBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
                                 <TextBlock Text="Nghiệm thu / Yêu cầu chỉnh sửa kết quả bàn giao" FontWeight="SemiBold" Margin="0,0,0,8" />
                                 <ui:TextBox Text="{Binding ReviewNotes, UpdateSourceTrigger=PropertyChanged}"

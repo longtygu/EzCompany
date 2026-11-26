@@ -2,6 +2,23 @@
 
 Tất cả thay đổi đáng chú ý của dự án **Ez Company** được ghi lại tại đây theo chuẩn [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và [Semantic Versioning 2.0.0](https://semver.org/).
 
+## [0.4.0] - 2026-11-27 — DWM Transparency & Card Tinting Fix, Realtime Chat + Stickers + Popups, Role Sidebar & HR/Payroll Upgrade
+
+### Sửa lỗi (Fixed)
+- **Độ trong suốt, Chất liệu cửa sổ & Màu thẻ trên Windows 10/11:** Loại bỏ cơ chế `WS_EX_LAYERED` gây lỗi, tạo `EzFluentWindow` giữ khung kính DWM (`GlassFrameThickness = -1`), nâng cấp `WindowTransparencyHelper` hỗ trợ Blur/Acrylic trên Windows 10 và Mica/Acrylic/Tabbed trên Windows 11, tạo `AppearancePaletteBuilder` pha màu chủ đề động vào nền thẻ/panel/viền trên toàn bộ XAML views, tắt ép màu accent hệ thống Windows và đồng bộ `ControlContentThemeFontSize`.
+
+### Thêm mới & Nâng cấp (Added & Changed)
+- **Chat nội bộ Realtime 1s, Popup nổi & Sticker tùy chỉnh:**
+  - Nâng cấp đồng bộ LAN (`PeerCollabSyncService`) và UI (`ChatWorkspaceView`) lên nhịp 1 giây tối ưu băng thông/DB bằng truy vấn dấu mốc delta (`GetGlobalLatestChatActivityUtcAsync`, `GetMessagesAfterAsync`), không nạp lại toàn bộ tin nhắn.
+  - Bổ sung cửa sổ popup nổi góc màn hình (`ChatToastPopupWindow` + `ChatNotificationPopupService`) khi có tin nhắn đến, bấm vào mở đúng hội thoại.
+  - Bổ sung `CustomStickerService` cho phép tạo, thêm ảnh sticker tùy chỉnh (PNG/JPG/GIF/WebP/BMP), xóa, gửi ngay trên khay sticker và đồng bộ P2P sang máy nhận; giao diện bong bóng chat trái/phải, avatar chữ cái đầu, badge chưa đọc và phím `Enter` gửi nhanh.
+- **Sidebar thu gọn/mở rộng dạng khay theo vị trí công việc:** Nhóm các công cụ theo khay `Expander` (`Không gian chung`, `Manager (Giám đốc)`, `HR (Nhân sự)`, `Accounting (Kế toán)`, `Legal (Pháp chế)`, `Staff & Office (Văn phòng)`).
+- **Nhân sự, Chấm công tùy chỉnh, Cửa sổ chi tiết riêng & Tính lương Tự động:**
+  - Danh sách hồ sơ nhân viên dạng thẻ `Expander` mở rộng khi bấm vào, hỗ trợ tìm kiếm, nút Thêm/Sửa/Xóa (có xác nhận) và cấu hình lương cơ bản/phụ cấp/công chuẩn/BHXH.
+  - Hỗ trợ chấm công theo giờ tùy chỉnh (`HH:mm`), ca qua đêm, số công, giờ tăng ca và mở **cửa sổ chi tiết riêng** (`AttendanceDetailWindow`) với bảng ma trận full ngày 1→cuối tháng + chỉnh sửa trực tiếp.
+  - Bổ sung phân hệ **Tính lương Tự động** theo công thực tế/tăng ca/BHXH và xuất Bảng lương Excel (`.xlsx`).
+  - Nâng cấp CSDL SQLite lên Migration v4 (`20261127000001_AddChatStickerAndPayrollFields`).
+
 ## [0.3.0] - 2026-11-26 — Appearance & Backdrop Fix, App Icon, Multi-Role Overview, P2P Chat, Timeline, Diagnostics & HR
 
 ### Sửa lỗi (Fixed)

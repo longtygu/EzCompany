@@ -223,6 +223,7 @@ public sealed class ChatMessageEntity
     public string SenderUsername { get; set; } = string.Empty;
     public string SenderFullName { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
+    public string MessageType { get; set; } = "Text"; // Text | Sticker | File | PinnedTask
     public string? AttachmentFileName { get; set; }
     public string? AttachmentVaultPath { get; set; }
     public string? AttachmentSha256 { get; set; }
@@ -266,6 +267,10 @@ public sealed class EmployeeProfileEntity
     public string NationalId { get; set; } = string.Empty;
     public DateTimeOffset JoinDateUtc { get; set; }
     public string EmploymentStatus { get; set; } = "Active"; // Active | OnLeave | Inactive
+    public decimal BaseSalaryVnd { get; set; } = 0m;
+    public decimal AllowanceVnd { get; set; } = 0m;
+    public double StandardWorkDaysPerMonth { get; set; } = 26.0;
+    public decimal InsuranceDeductionVnd { get; set; } = 0m;
     public string Notes { get; set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
@@ -283,6 +288,9 @@ public sealed class AttendanceRecordEntity
     public DateTimeOffset? CheckInUtc { get; set; }
     public DateTimeOffset? CheckOutUtc { get; set; }
     public double WorkedHours { get; set; }
+    public double OvertimeHours { get; set; } = 0.0;
+    public double WorkDayUnits { get; set; } = 1.0;
+    public bool IsManualEntry { get; set; } = false;
     public string Status { get; set; } = "Present"; // Present | Late | HalfDay | Leave | Absent
     public string Notes { get; set; } = string.Empty;
     public DateTimeOffset UpdatedAtUtc { get; set; }

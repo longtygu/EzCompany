@@ -35,9 +35,9 @@
                     <Border Margin="0,10,0,0"
                             Padding="{DynamicResource AppCardPadding}"
                             CornerRadius="{DynamicResource AppCardCornerRadius}"
-                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            Background="{DynamicResource AppCardBackgroundBrush}"
                             BorderThickness="1"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            BorderBrush="{DynamicResource AppCardBorderBrush}">
                         <StackPanel>
                             <TextBlock Text="{Binding SolarDateText}" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding LunarDateText}" Opacity="0.85" Margin="0,4,0,0" />
@@ -70,9 +70,9 @@
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 Margin="0,0,0,16"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                Background="{DynamicResource AppCardBackgroundBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
                                 <TextBlock Text="Bảng Lịch trình &amp; Kế hoạch chung (Giám đốc &amp; Nhân viên cùng bổ sung)"
                                            FontSize="{DynamicResource AppFontSizeHeading}"
@@ -111,7 +111,7 @@
                                             <Border Margin="0,0,0,8"
                                                     Padding="10,8"
                                                     CornerRadius="8"
-                                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                                    Background="{DynamicResource AppCardInnerBackgroundBrush}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto" />
@@ -156,9 +156,9 @@
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 Margin="0,0,0,16"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                Background="{DynamicResource AppCardBackgroundBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -211,9 +211,9 @@
                             <Border Grid.Column="0"
                                     Padding="{DynamicResource AppCardPadding}"
                                     CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    Background="{DynamicResource AppCardBackgroundBrush}"
                                     BorderThickness="1"
-                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                    BorderBrush="{DynamicResource AppCardBorderBrush}">
                                 <StackPanel>
                                     <TextBlock Text="Task hôm nay (Tự tạo)"
                                                FontSize="{DynamicResource AppFontSizeHeading}"
@@ -246,7 +246,7 @@
                                                 <Border Margin="0,0,0,8"
                                                         Padding="10,8"
                                                         CornerRadius="6"
-                                                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                                        Background="{DynamicResource AppCardInnerBackgroundBrush}">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto" />
@@ -280,9 +280,9 @@
                             <Border Grid.Column="2"
                                     Padding="{DynamicResource AppCardPadding}"
                                     CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    Background="{DynamicResource AppCardBackgroundBrush}"
                                     BorderThickness="1"
-                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                    BorderBrush="{DynamicResource AppCardBorderBrush}">
                                 <StackPanel>
                                     <TextBlock Text="Task được giao"
                                                FontSize="{DynamicResource AppFontSizeHeading}"
@@ -327,9 +327,9 @@
                         <!-- Completed Tasks History -->
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                Background="{DynamicResource AppCardBackgroundBrush}"
                                 BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
                                 <TextBlock Text="Lịch sử hoàn thành các task"
                                            FontSize="{DynamicResource AppFontSizeHeading}"
@@ -365,9 +365,9 @@
                                 <Border Margin="0,12,0,0"
                                         Padding="{DynamicResource AppCardPadding}"
                                         CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        Background="{DynamicResource AppCardBackgroundBrush}"
                                         BorderThickness="1"
-                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                        BorderBrush="{DynamicResource AppCardBorderBrush}">
                                     <StackPanel>
                                         <TextBlock Text="{Binding Headline}"
                                                    FontSize="{DynamicResource AppFontSizeHeading}"

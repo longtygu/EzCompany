@@ -21,6 +21,7 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
     private readonly ThemeService _theme;
     private readonly CompanyBrandingService _branding;
     private readonly ILogger<WorkspaceWindowViewModel> _logger;
+    private readonly ChatNotificationPopupService? _chatPopupService;
 
     private string? _pendingActionNavKey;
 
@@ -33,7 +34,8 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         IEventBus eventBus,
         ThemeService theme,
         CompanyBrandingService branding,
-        ILogger<WorkspaceWindowViewModel> logger)
+        ILogger<WorkspaceWindowViewModel> logger,
+        ChatNotificationPopupService? chatPopupService = null)
     {
         _session = session;
         _permissions = permissions;
@@ -44,6 +46,7 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         _theme = theme;
         _branding = branding;
         _logger = logger;
+        _chatPopupService = chatPopupService;
 
         _permissions.PolicyChanged += (_, _) => PolicyRefreshRequested?.Invoke(this, EventArgs.Empty);
         _eventBus.Subscribe<InternalNoticeEvent>(evt =>
@@ -61,8 +64,20 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         });
         _eventBus.Subscribe<ChatMessageReceivedEvent>(evt =>
         {
+            if (!string.IsNullOrWhiteSpace(evt.SenderMachineId) &&
+                string.Equals(evt.SenderMachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
             if (SelectedNavItem?.Key != "core.chat")
             {
+                NavigationItemModel? chatNav = NavigationItems.FirstOrDefault(x => x.Key == "core.chat");
+                if (chatNav is not null)
+                {
+                    chatNav.BadgeCount++;
+                }
+
                 ActiveNoticeBanner = $"💬 Tin nhắn mới từ {evt.SenderFullName}: {evt.Preview}";
                 _pendingActionNavKey = "core.chat";
                 HasNoticeAction = true;
@@ -75,6 +90,7 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         _eventBus.Subscribe<CompanyLogoUpdatedEvent>(_ => LogoRefreshRequested?.Invoke(this, EventArgs.Empty));
     }
 
+    public ObservableCollection<NavigationGroupModel> NavigationGroups { get; } = [];
     public ObservableCollection<NavigationItemModel> NavigationItems { get; } = [];
 
     [ObservableProperty] private NavigationItemModel? _selectedNavItem;
@@ -116,94 +132,182 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         IsPolicyLocked = _permissions.IsLocked;
         PolicyLockReason = _permissions.LockReason;
 
+        NavigationGroups.Clear();
         NavigationItems.Clear();
 
-        NavigationItems.Add(new NavigationItemModel
+        // 1. Common Workspace Group
+        var commonGroup = new NavigationGroupModel
+        {
+            GroupKey = "group.common",
+            Title = "Không gian chung",
+            Subtitle = "Tổng quan, Chat P2P & Giao việc",
+            IsExpanded = true
+        };
+
+        AddNavItem(commonGroup, new NavigationItemModel
         {
             Key = "overview",
             Title = "Tổng quan",
             Subtitle = "Chào mừng, Lịch trình & Vai trò",
             CreateContent = () =>
             {
-                var view = (WelcomeDashboardView)_services.GetService(typeof(WelcomeDashboardView))!;
-                if (view.DataContext is WelcomeDashboardViewModel vm)
+                var view = _services.GetService(typeof(WelcomeDashboardView)) as WelcomeDashboardView;
+                if (view?.DataContext is WelcomeDashboardViewModel vm)
                 {
                     vm.NavigateRequested += (_, key) => OpenNavigationItem(key);
                 }
-                return view;
+                return view!;
             }
         });
 
         if (!_permissions.IsLocked)
         {
-            NavigationItems.Add(new NavigationItemModel
+            AddNavItem(commonGroup, new NavigationItemModel
+            {
+                Key = "core.chat",
+                Title = "Chat nội bộ",
+                Subtitle = "1s Realtime, Popup & Sticker",
+                CreateContent = () => _services.GetService(typeof(ChatWorkspaceView))!
+            });
+
+            AddNavItem(commonGroup, new NavigationItemModel
             {
                 Key = "core.tasks",
                 Title = "Giao việc & Bàn giao",
                 Subtitle = "Đính kèm file, Thông báo & Lịch sử",
                 CreateContent = () => _services.GetService(typeof(TaskManagementView))!
             });
-
-            NavigationItems.Add(new NavigationItemModel
-            {
-                Key = "core.chat",
-                Title = "Chat nội bộ",
-                Subtitle = "Chat riêng, Nhóm & Ghim việc P2P",
-                CreateContent = () => _services.GetService(typeof(ChatWorkspaceView))!
-            });
-
-            NavigationItems.Add(new NavigationItemModel
-            {
-                Key = "core.hr",
-                Title = "Nhân sự & Chấm công",
-                Subtitle = "Hồ sơ NV, Check-in/out & Excel",
-                CreateContent = () => _services.GetService(typeof(HrAttendanceView))!
-            });
         }
 
+        NavigationGroups.Add(commonGroup);
+
+        // 2. Director (Manager) Role Group
         if (_session.IsDirectorNode && !_permissions.IsLocked)
         {
-            NavigationItems.Add(new NavigationItemModel
+            var directorGroup = new NavigationGroupModel
+            {
+                GroupKey = "group.director",
+                Title = "Manager (Giám đốc)",
+                Subtitle = "Điều hành LAN, SAS & Dữ liệu",
+                IsExpanded = true
+            };
+
+            AddNavItem(directorGroup, new NavigationItemModel
             {
                 Key = "director.dashboard",
-                Title = "Quản trị Giám đốc",
-                Subtitle = "Manager (Giám đốc) • LAN & SAS",
+                Title = "Bảng điều hành Giám đốc",
+                Subtitle = "Lưới máy trạm, Telemetry & SAS",
                 CreateContent = () =>
                 {
-                    var view = (ExecutiveDashboardView)_services.GetService(typeof(ExecutiveDashboardView))!;
-                    if (view.DataContext is ExecutiveDashboardViewModel vm)
+                    var view = _services.GetService(typeof(ExecutiveDashboardView)) as ExecutiveDashboardView;
+                    if (view?.DataContext is ExecutiveDashboardViewModel vm)
                     {
                         vm.InspectDatabaseRequested += async (_, dbPath) => await OpenDbInspectorAsync(dbPath);
                     }
-                    return view;
+                    return view!;
                 }
             });
 
-            NavigationItems.Add(new NavigationItemModel
+            AddNavItem(directorGroup, new NavigationItemModel
             {
                 Key = "director.db_inspector",
                 Title = "Read-Only DB Inspector",
                 Subtitle = "Xem bản chụp .db chỉ đọc",
                 CreateContent = () => _services.GetService(typeof(DbInspectorView))!
             });
+
+            NavigationGroups.Add(directorGroup);
         }
 
+        // 3. HR (Nhân sự) Role Group: Profiles, Attendance, Payroll
         if (!_permissions.IsLocked)
         {
-            foreach (IAppModule module in _modules.OrderBy(m => m.Metadata.DisplayOrder))
+            bool expandHrByDefault = CompanyRoles.HasRole(_session.Role, CompanyRoles.Hr) || _session.IsDirectorNode;
+            var hrGroup = new NavigationGroupModel
             {
-                if (_permissions.HasModuleAccess(module.Metadata.ModuleId))
+                GroupKey = "group.hr",
+                Title = "HR (Nhân sự)",
+                Subtitle = "Hồ sơ, Chấm công & Tính lương",
+                IsExpanded = expandHrByDefault
+            };
+
+            AddNavItem(hrGroup, CreateHrNavItem("core.hr.profiles", "Hồ sơ nhân viên", "Khay mở rộng • Thêm/Sửa/Xóa", 0));
+            AddNavItem(hrGroup, CreateHrNavItem("core.hr.attendance", "Chấm công", "Giờ tùy chỉnh & Bảng full ngày", 1));
+            AddNavItem(hrGroup, CreateHrNavItem("core.hr.payroll", "Tính lương tự động", "Công, Tăng ca & Xuất Excel", 2));
+            NavigationGroups.Add(hrGroup);
+
+            // 4. Role-based Module Groups (Accounting, Legal, Office, Extensions)
+            IAppModule[] allowedModules = _modules
+                .OrderBy(m => m.Metadata.DisplayOrder)
+                .Where(m => _permissions.HasModuleAccess(m.Metadata.ModuleId))
+                .ToArray();
+
+            NavigationGroupModel? accGroup = null;
+            NavigationGroupModel? legalGroup = null;
+            NavigationGroupModel? officeGroup = null;
+            NavigationGroupModel? extGroup = null;
+
+            foreach (IAppModule module in allowedModules)
+            {
+                IAppModule captured = module;
+                var navItem = new NavigationItemModel
                 {
-                    IAppModule captured = module;
-                    NavigationItems.Add(new NavigationItemModel
+                    Key = captured.Metadata.ModuleId,
+                    Title = captured.Metadata.DisplayName,
+                    Subtitle = captured.Metadata.Category,
+                    CreateContent = () => captured.CreateView(_services)
+                };
+
+                if (string.Equals(captured.Metadata.ModuleId, ModuleIds.AccountingInvoiceXml, StringComparison.OrdinalIgnoreCase))
+                {
+                    accGroup ??= new NavigationGroupModel
                     {
-                        Key = captured.Metadata.ModuleId,
-                        Title = captured.Metadata.DisplayName,
-                        Subtitle = captured.Metadata.Category,
-                        CreateContent = () => captured.CreateView(_services)
-                    });
+                        GroupKey = "group.accounting",
+                        Title = "Accounting (Kế toán)",
+                        Subtitle = "Hóa đơn XML & Công cụ kế toán",
+                        IsExpanded = CompanyRoles.HasRole(_session.Role, CompanyRoles.Accounting) || _session.IsDirectorNode
+                    };
+                    AddNavItem(accGroup, navItem);
+                }
+                else if (string.Equals(captured.Metadata.ModuleId, ModuleIds.LegalContractDiff, StringComparison.OrdinalIgnoreCase))
+                {
+                    legalGroup ??= new NavigationGroupModel
+                    {
+                        GroupKey = "group.legal",
+                        Title = "Legal (Pháp chế)",
+                        Subtitle = "Rà soát & So sánh Hợp đồng",
+                        IsExpanded = CompanyRoles.HasRole(_session.Role, CompanyRoles.Legal) || _session.IsDirectorNode
+                    };
+                    AddNavItem(legalGroup, navItem);
+                }
+                else if (string.Equals(captured.Metadata.ModuleId, ModuleIds.OfficePdfStudio, StringComparison.OrdinalIgnoreCase))
+                {
+                    officeGroup ??= new NavigationGroupModel
+                    {
+                        GroupKey = "group.office",
+                        Title = "Staff & Office (Văn phòng)",
+                        Subtitle = "Xử lý PDF & Tiện ích dùng chung",
+                        IsExpanded = CompanyRoles.HasRole(_session.Role, CompanyRoles.Staff) || _session.IsDirectorNode
+                    };
+                    AddNavItem(officeGroup, navItem);
+                }
+                else
+                {
+                    extGroup ??= new NavigationGroupModel
+                    {
+                        GroupKey = "group.extensions",
+                        Title = "Tiện ích mở rộng",
+                        Subtitle = "Module cộng đồng",
+                        IsExpanded = false
+                    };
+                    AddNavItem(extGroup, navItem);
                 }
             }
+
+            if (accGroup is not null) NavigationGroups.Add(accGroup);
+            if (legalGroup is not null) NavigationGroups.Add(legalGroup);
+            if (officeGroup is not null) NavigationGroups.Add(officeGroup);
+            if (extGroup is not null) NavigationGroups.Add(extGroup);
         }
 
         if (previousKey == "core.settings")
@@ -212,8 +316,7 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         }
         else
         {
-            NavigationItemModel? next = NavigationItems.FirstOrDefault(x => x.Key == previousKey)
-                                        ?? NavigationItems.FirstOrDefault();
+            NavigationItemModel? next = FindNavItemByKey(previousKey) ?? NavigationItems.FirstOrDefault();
             SelectedNavItem = next;
         }
     }
@@ -226,23 +329,74 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
             return;
         }
 
-        NavigationItemModel? item = NavigationItems.FirstOrDefault(x => x.Key == key);
+        NavigationItemModel? item = FindNavItemByKey(key);
         if (item is not null)
         {
+            NavigationGroupModel? parent = NavigationGroups.FirstOrDefault(g => g.Items.Contains(item));
+            if (parent is not null)
+            {
+                parent.IsExpanded = true;
+            }
+
             IsSettingsSelected = false;
             SelectedNavItem = item;
         }
     }
 
+    public async Task OpenChatConversationAsync(Guid conversationId)
+    {
+        OpenNavigationItem("core.chat");
+        if (ActiveView is ChatWorkspaceView chatView && chatView.DataContext is ChatWorkspaceViewModel chatVm)
+        {
+            await chatVm.SelectConversationByIdAsync(conversationId);
+        }
+    }
+
+    [RelayCommand]
+    private void SelectNavItem(NavigationItemModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        NavigationGroupModel? parent = NavigationGroups.FirstOrDefault(g => g.Items.Contains(item));
+        if (parent is not null)
+        {
+            parent.IsExpanded = true;
+        }
+
+        SelectedNavItem = item;
+    }
+
     partial void OnSelectedNavItemChanged(NavigationItemModel? value)
     {
+        foreach (NavigationItemModel nav in NavigationItems)
+        {
+            nav.IsSelected = nav == value;
+        }
+
         if (value is null)
         {
             return;
         }
 
         IsSettingsSelected = false;
-        ActiveView = value.CreateContent();
+
+        if (string.Equals(value.Key, "core.chat", StringComparison.OrdinalIgnoreCase))
+        {
+            value.BadgeCount = 0;
+        }
+
+        if (value.Key.StartsWith("core.hr.", StringComparison.OrdinalIgnoreCase) && ActiveView is HrAttendanceView existingHrView)
+        {
+            value.OnActivated?.Invoke(existingHrView);
+            return;
+        }
+
+        object created = value.CreateContent();
+        value.OnActivated?.Invoke(created);
+        ActiveView = created;
     }
 
     [RelayCommand]
@@ -277,11 +431,10 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
 
     public async Task OpenDbInspectorAsync(string dbFilePath)
     {
-        NavigationItemModel? item = NavigationItems.FirstOrDefault(x => x.Key == "director.db_inspector");
+        NavigationItemModel? item = FindNavItemByKey("director.db_inspector");
         if (item is not null)
         {
-            IsSettingsSelected = false;
-            SelectedNavItem = item;
+            OpenNavigationItem(item.Key);
             if (ActiveView is DbInspectorView inspectorView && inspectorView.DataContext is DbInspectorViewModel vm)
             {
                 await vm.LoadFileAsync(dbFilePath);
@@ -292,7 +445,43 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
     [RelayCommand]
     private void Logout()
     {
+        _chatPopupService?.CloseAllPopups();
         _session.ClearAuthentication();
         LogoutRequested?.Invoke(this, EventArgs.Empty);
     }
+
+    private NavigationItemModel? FindNavItemByKey(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        string mappedKey = string.Equals(key, "core.hr", StringComparison.OrdinalIgnoreCase)
+            ? "core.hr.profiles"
+            : key;
+
+        return NavigationItems.FirstOrDefault(x => string.Equals(x.Key, mappedKey, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void AddNavItem(NavigationGroupModel group, NavigationItemModel item)
+    {
+        group.Items.Add(item);
+        NavigationItems.Add(item);
+    }
+
+    private NavigationItemModel CreateHrNavItem(string key, string title, string subtitle, int targetTabIndex) => new()
+    {
+        Key = key,
+        Title = title,
+        Subtitle = subtitle,
+        CreateContent = () => _services.GetService(typeof(HrAttendanceView))!,
+        OnActivated = view =>
+        {
+            if (view is HrAttendanceView hrView && hrView.DataContext is HrAttendanceViewModel vm)
+            {
+                vm.SelectedTabIndex = targetTabIndex;
+            }
+        }
+    };
 }

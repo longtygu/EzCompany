@@ -165,6 +165,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.SenderMachineId).HasMaxLength(128).IsRequired();
             e.Property(x => x.SenderUsername).HasMaxLength(128).IsRequired();
             e.Property(x => x.SenderFullName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.MessageType).HasMaxLength(32).IsRequired();
         });
 
         modelBuilder.Entity<TimelinePlanEntity>(e =>

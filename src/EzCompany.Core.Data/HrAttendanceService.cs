@@ -15,6 +15,26 @@ public sealed record MonthlyAttendanceSummaryRow(
     int AbsentDays,
     double TotalWorkedHours);
 
+public sealed record MonthlyPayrollRow(
+    Guid EmployeeProfileId,
+    string EmployeeCode,
+    string EmployeeName,
+    string Department,
+    string PositionTitle,
+    decimal BaseSalaryVnd,
+    decimal AllowanceVnd,
+    double StandardWorkDays,
+    double ActualWorkDays,
+    double TotalWorkedHours,
+    double OvertimeHours,
+    int LateDays,
+    int AbsentDays,
+    decimal ProratedBaseSalaryVnd,
+    decimal OvertimePayVnd,
+    decimal BonusOrAdjustmentVnd,
+    decimal InsuranceDeductionVnd,
+    decimal NetSalaryVnd);
+
 /// <summary>
 /// Manages local employee HR profiles, daily check-in/check-out attendance tracking,
 /// and monthly attendance summaries ready for Excel reporting.
@@ -75,6 +95,7 @@ public sealed class HrAttendanceService
 
         string normalizedCode = profile.EmployeeCode.Trim().ToUpperInvariant();
         string formattedRoles = CompanyRoles.FormatRoleStorage(CompanyRoles.ParseRoles(profile.RolesCsv));
+        double standardDays = profile.StandardWorkDaysPerMonth <= 0 ? 26.0 : Math.Round(profile.StandardWorkDaysPerMonth, 2);
 
         if (existing is null)
         {
@@ -100,6 +121,10 @@ public sealed class HrAttendanceService
                 NationalId = profile.NationalId?.Trim() ?? string.Empty,
                 JoinDateUtc = profile.JoinDateUtc == default ? now : profile.JoinDateUtc,
                 EmploymentStatus = string.IsNullOrWhiteSpace(profile.EmploymentStatus) ? "Active" : profile.EmploymentStatus.Trim(),
+                BaseSalaryVnd = Math.Max(0m, profile.BaseSalaryVnd),
+                AllowanceVnd = Math.Max(0m, profile.AllowanceVnd),
+                StandardWorkDaysPerMonth = standardDays,
+                InsuranceDeductionVnd = Math.Max(0m, profile.InsuranceDeductionVnd),
                 Notes = profile.Notes?.Trim() ?? string.Empty,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
@@ -108,6 +133,14 @@ public sealed class HrAttendanceService
         }
         else
         {
+            bool duplicate = await db.EmployeeProfiles
+                .AnyAsync(e => e.Id != existing.Id && e.EmployeeCode == normalizedCode, ct)
+                .ConfigureAwait(false);
+            if (duplicate)
+            {
+                throw new InvalidOperationException($"Mã nhân viên '{normalizedCode}' đã tồn tại cho nhân viên khác.");
+            }
+
             existing.EmployeeCode = normalizedCode;
             existing.FullName = profile.FullName.Trim();
             existing.Department = profile.Department?.Trim() ?? string.Empty;
@@ -118,7 +151,15 @@ public sealed class HrAttendanceService
             existing.Phone = profile.Phone?.Trim() ?? string.Empty;
             existing.Email = profile.Email?.Trim() ?? string.Empty;
             existing.NationalId = profile.NationalId?.Trim() ?? string.Empty;
+            if (profile.JoinDateUtc != default)
+            {
+                existing.JoinDateUtc = profile.JoinDateUtc;
+            }
             existing.EmploymentStatus = string.IsNullOrWhiteSpace(profile.EmploymentStatus) ? "Active" : profile.EmploymentStatus.Trim();
+            existing.BaseSalaryVnd = Math.Max(0m, profile.BaseSalaryVnd);
+            existing.AllowanceVnd = Math.Max(0m, profile.AllowanceVnd);
+            existing.StandardWorkDaysPerMonth = standardDays;
+            existing.InsuranceDeductionVnd = Math.Max(0m, profile.InsuranceDeductionVnd);
             existing.Notes = profile.Notes?.Trim() ?? string.Empty;
             existing.UpdatedAtUtc = now;
         }
@@ -316,6 +357,10 @@ public sealed class HrAttendanceService
             {
                 rec.WorkedHours = Math.Round(Math.Max(0.0, (nowUtc - rec.CheckInUtc.Value).TotalHours), 2);
             }
+            if (rec.WorkDayUnits <= 0.0 && rec.Status is "Present" or "Late" or "Leave")
+            {
+                rec.WorkDayUnits = 1.0;
+            }
             rec.Notes = string.IsNullOrWhiteSpace(rec.Notes)
                 ? $"Ra ca ({localNow:HH:mm})"
                 : $"{rec.Notes} • Ra ca ({localNow:HH:mm})";
@@ -376,6 +421,9 @@ public sealed class HrAttendanceService
                 CheckInUtc = record.CheckInUtc,
                 CheckOutUtc = record.CheckOutUtc,
                 WorkedHours = record.WorkedHours,
+                OvertimeHours = record.OvertimeHours,
+                WorkDayUnits = record.WorkDayUnits,
+                IsManualEntry = record.IsManualEntry,
                 Status = record.Status,
                 Notes = record.Notes,
                 UpdatedAtUtc = record.UpdatedAtUtc
@@ -387,6 +435,9 @@ public sealed class HrAttendanceService
             existing.CheckInUtc = record.CheckInUtc;
             existing.CheckOutUtc = record.CheckOutUtc;
             existing.WorkedHours = record.WorkedHours;
+            existing.OvertimeHours = record.OvertimeHours;
+            existing.WorkDayUnits = record.WorkDayUnits;
+            existing.IsManualEntry = record.IsManualEntry;
             existing.Status = record.Status;
             existing.Notes = record.Notes;
             existing.UpdatedAtUtc = record.UpdatedAtUtc;
@@ -443,6 +494,177 @@ public sealed class HrAttendanceService
                 LeaveDays: empRecs.Count(r => r.Status == "Leave"),
                 AbsentDays: empRecs.Count(r => r.Status == "Absent"),
                 TotalWorkedHours: Math.Round(empRecs.Sum(r => r.WorkedHours), 2)));
+        }
+
+        return rows;
+    }
+
+    public async Task<AttendanceRecordEntity> SaveCustomAttendanceAsync(
+        Guid employeeProfileId,
+        DateOnly workDate,
+        TimeSpan? checkInLocalTime,
+        TimeSpan? checkOutLocalTime,
+        string status,
+        double? customWorkDayUnits,
+        double overtimeHours,
+        string notes,
+        CancellationToken ct = default)
+    {
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        EmployeeProfileEntity emp = await db.EmployeeProfiles
+            .FirstOrDefaultAsync(e => e.Id == employeeProfileId, ct)
+            .ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Không tìm thấy hồ sơ nhân viên để chấm công.");
+
+        DateTimeOffset? checkInUtc = null;
+        DateTimeOffset? checkOutUtc = null;
+        if (checkInLocalTime.HasValue)
+        {
+            DateTime localIn = workDate.ToDateTime(TimeOnly.FromTimeSpan(checkInLocalTime.Value));
+            checkInUtc = new DateTimeOffset(localIn, TimeZoneInfo.Local.GetUtcOffset(localIn)).ToUniversalTime();
+        }
+
+        if (checkOutLocalTime.HasValue)
+        {
+            DateOnly outDate = checkInLocalTime.HasValue && checkOutLocalTime.Value < checkInLocalTime.Value
+                ? workDate.AddDays(1)
+                : workDate;
+            DateTime localOut = outDate.ToDateTime(TimeOnly.FromTimeSpan(checkOutLocalTime.Value));
+            checkOutUtc = new DateTimeOffset(localOut, TimeZoneInfo.Local.GetUtcOffset(localOut)).ToUniversalTime();
+        }
+
+        double workedHours = checkInUtc.HasValue && checkOutUtc.HasValue
+            ? Math.Round(Math.Max(0.0, (checkOutUtc.Value - checkInUtc.Value).TotalHours), 2)
+            : 0.0;
+
+        string normalizedStatus = string.IsNullOrWhiteSpace(status) ? "Present" : status.Trim();
+        double defaultUnits = normalizedStatus switch
+        {
+            "HalfDay" => 0.5,
+            "Absent" => 0.0,
+            _ => 1.0
+        };
+        double workUnits = customWorkDayUnits.HasValue
+            ? Math.Round(Math.Clamp(customWorkDayUnits.Value, 0.0, 2.0), 2)
+            : defaultUnits;
+        double clampedOt = Math.Round(Math.Clamp(overtimeHours, 0.0, 24.0), 2);
+        string dateKey = workDate.ToString("yyyy-MM-dd");
+        DateTimeOffset now = _timeProvider.GetUtcNow();
+
+        AttendanceRecordEntity? rec = await db.AttendanceRecords
+            .FirstOrDefaultAsync(r => r.EmployeeProfileId == emp.Id && r.DateKey == dateKey, ct)
+            .ConfigureAwait(false);
+
+        if (rec is null)
+        {
+            rec = new AttendanceRecordEntity
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = emp.CompanyId != Guid.Empty ? emp.CompanyId : _session.CompanyId,
+                EmployeeProfileId = emp.Id,
+                EmployeeCode = emp.EmployeeCode,
+                EmployeeName = emp.FullName,
+                MachineId = emp.LinkedMachineId ?? _paths.MachineId,
+                DateKey = dateKey,
+                CheckInUtc = checkInUtc,
+                CheckOutUtc = checkOutUtc,
+                WorkedHours = workedHours,
+                OvertimeHours = clampedOt,
+                WorkDayUnits = workUnits,
+                IsManualEntry = true,
+                Status = normalizedStatus,
+                Notes = notes?.Trim() ?? string.Empty,
+                UpdatedAtUtc = now
+            };
+            db.AttendanceRecords.Add(rec);
+        }
+        else
+        {
+            rec.EmployeeCode = emp.EmployeeCode;
+            rec.EmployeeName = emp.FullName;
+            rec.CheckInUtc = checkInUtc;
+            rec.CheckOutUtc = checkOutUtc;
+            rec.WorkedHours = workedHours;
+            rec.OvertimeHours = clampedOt;
+            rec.WorkDayUnits = workUnits;
+            rec.IsManualEntry = true;
+            rec.Status = normalizedStatus;
+            rec.Notes = notes?.Trim() ?? string.Empty;
+            rec.UpdatedAtUtc = now;
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await _audit.LogAsync(
+            "HR_ATTENDANCE_MANUAL_SAVED",
+            "core.hr",
+            rec.EmployeeCode,
+            $"{dateKey} In={checkInLocalTime?.ToString(@"hh\:mm") ?? "-"} Out={checkOutLocalTime?.ToString(@"hh\:mm") ?? "-"} Công={workUnits} OT={clampedOt}h",
+            "Info",
+            ct).ConfigureAwait(false);
+
+        return rec;
+    }
+
+    public async Task DeleteAttendanceRecordAsync(Guid recordId, CancellationToken ct = default)
+    {
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        AttendanceRecordEntity? rec = await db.AttendanceRecords.FirstOrDefaultAsync(r => r.Id == recordId, ct).ConfigureAwait(false);
+        if (rec is null)
+        {
+            return;
+        }
+
+        db.AttendanceRecords.Remove(rec);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await _audit.LogAsync("HR_ATTENDANCE_DELETED", "core.hr", rec.EmployeeCode, rec.DateKey, "Warning", ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<MonthlyPayrollRow>> CalculateMonthlyPayrollAsync(
+        int year,
+        int month,
+        IReadOnlyDictionary<Guid, decimal>? bonusOverrides = null,
+        CancellationToken ct = default)
+    {
+        IReadOnlyList<EmployeeProfileEntity> employees = await GetEmployeesAsync(ct).ConfigureAwait(false);
+        IReadOnlyList<AttendanceRecordEntity> records = await GetAttendanceRecordsAsync(year, month, null, ct).ConfigureAwait(false);
+        ILookup<Guid, AttendanceRecordEntity> byEmp = records.ToLookup(r => r.EmployeeProfileId);
+
+        var rows = new List<MonthlyPayrollRow>(employees.Count);
+        foreach (EmployeeProfileEntity emp in employees)
+        {
+            List<AttendanceRecordEntity> empRecs = byEmp[emp.Id].ToList();
+            double actualWorkDays = Math.Round(empRecs.Sum(r => r.WorkDayUnits), 2);
+            double totalHours = Math.Round(empRecs.Sum(r => r.WorkedHours), 2);
+            double otHours = Math.Round(empRecs.Sum(r => r.OvertimeHours), 2);
+            int lateDays = empRecs.Count(r => r.Status == "Late");
+            int absentDays = empRecs.Count(r => r.Status == "Absent");
+
+            double stdDays = emp.StandardWorkDaysPerMonth <= 0 ? 26.0 : emp.StandardWorkDaysPerMonth;
+            decimal prorated = Math.Round(emp.BaseSalaryVnd * (decimal)(actualWorkDays / stdDays), 0);
+            decimal hourlyRate = emp.BaseSalaryVnd / (decimal)(stdDays * 8.0);
+            decimal overtimePay = Math.Round(hourlyRate * 1.5m * (decimal)otHours, 0);
+            decimal bonus = bonusOverrides is not null && bonusOverrides.TryGetValue(emp.Id, out decimal b) ? b : 0m;
+            decimal net = Math.Max(0m, prorated + emp.AllowanceVnd + overtimePay + bonus - emp.InsuranceDeductionVnd);
+
+            rows.Add(new MonthlyPayrollRow(
+                emp.Id,
+                emp.EmployeeCode,
+                emp.FullName,
+                emp.Department,
+                emp.PositionTitle,
+                emp.BaseSalaryVnd,
+                emp.AllowanceVnd,
+                stdDays,
+                actualWorkDays,
+                totalHours,
+                otHours,
+                lateDays,
+                absentDays,
+                prorated,
+                overtimePay,
+                bonus,
+                emp.InsuranceDeductionVnd,
+                net));
         }
 
         return rows;

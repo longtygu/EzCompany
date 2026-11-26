@@ -7,7 +7,7 @@
             <TextBlock Text="Cập nhật An toàn (Velopack) &amp; Sao lưu Di trú CSDL" FontSize="22" FontWeight="Bold" />
             <TextBlock Text="{Binding RepoUrlText}" Opacity="0.75" Margin="0,4,0,18" />
 
-            <Border Padding="16" Margin="0,0,0,16" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <Border Padding="{DynamicResource AppCardPadding}" Margin="0,0,0,16" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                 <StackPanel>
                     <TextBlock Text="{Binding VersionText}" FontSize="16" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding PolicyGateText}" Margin="0,6,0,10" TextWrapping="Wrap" />
@@ -22,7 +22,7 @@
                 </StackPanel>
             </Border>
 
-            <Border Padding="16" CornerRadius="10" Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <Border Padding="{DynamicResource AppCardPadding}" CornerRadius="{DynamicResource AppCardCornerRadius}" Background="{DynamicResource AppCardBackgroundBrush}">
                 <StackPanel>
                     <TextBlock Text="Lịch sử Sao lưu trước Migration (PreMigration Backups + SHA-256)" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
                     <ListBox ItemsSource="{Binding PreMigrationBackups}" Height="160" />

@@ -68,7 +68,9 @@ public sealed record ChatMessageReceivedEvent(
     Guid MessageId,
     string SenderFullName,
     string Preview,
-    DateTimeOffset SentAtUtc);
+    DateTimeOffset SentAtUtc,
+    string SenderMachineId = "",
+    string MessageType = "Text");
 
 public sealed record TimelinePlanUpdatedEvent(
     Guid PlanId,

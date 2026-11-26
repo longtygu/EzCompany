@@ -7,12 +7,12 @@
             <TextBlock Text="{Binding CompanyTitle}" FontSize="24" FontWeight="Bold" />
             <TextBlock Text="{Binding UserSubtitle}" Margin="0,4,0,20" Opacity="0.8" />
 
-            <Border Padding="16"
+            <Border Padding="{DynamicResource AppCardPadding}"
                     Margin="0,0,0,16"
-                    CornerRadius="10"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="{DynamicResource AppCardCornerRadius}"
+                    Background="{DynamicResource AppCardInnerBackgroundBrush}"
                     BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                    BorderBrush="{DynamicResource AppCardBorderBrush}">
                 <StackPanel>
                     <TextBlock Text="Trạng thái Giấy phép &amp; Bảo mật Cục bộ (policy.lic + clock.guard)"
                                FontSize="16"
@@ -22,11 +22,11 @@
                 </StackPanel>
             </Border>
 
-            <Border Padding="16"
-                    CornerRadius="10"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+            <Border Padding="{DynamicResource AppCardPadding}"
+                    CornerRadius="{DynamicResource AppCardCornerRadius}"
+                    Background="{DynamicResource AppCardInnerBackgroundBrush}"
                     BorderThickness="1"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                    BorderBrush="{DynamicResource AppCardBorderBrush}">
                 <StackPanel>
                     <TextBlock Text="Thông tin Phiên, Mạng LAN &amp; Nhật ký Cục bộ" FontSize="16" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding LanSummary}" Margin="0,8,0,0" TextWrapping="Wrap" />

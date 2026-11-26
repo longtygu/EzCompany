@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EzCompany.Core.Abstractions;
 using Wpf.Ui.Appearance;
@@ -11,8 +12,8 @@ using Wpf.Ui.Controls;
 namespace EzCompany.App.Services;
 
 /// <summary>
-/// Persists and live-applies per-profile UI appearance customization without triggering redundant
-/// full theme reloads that could corrupt window backdrop tint colors.
+/// Persists and live-applies per-profile UI appearance customization cleanly across Windows 10 and 11
+/// using dynamic palette resources and extended DWM glass frames.
 /// </summary>
 public sealed class AppearanceSettingsService : ObservableObject
 {
@@ -28,10 +29,20 @@ public sealed class AppearanceSettingsService : ObservableObject
     }
 
     public AppearanceSettings Current { get; private set; }
+    public string LastEffectiveMaterial { get; private set; } = string.Empty;
 
     public event EventHandler<AppearanceSettings>? SettingsChanged;
 
-    public static IReadOnlyList<string> AvailableBackdrops { get; } = ["None", "Mica", "Acrylic", "Tabbed"];
+    public static IReadOnlyList<string> AvailableBackdrops { get; } = ["None", "Blur", "Acrylic", "Mica", "Tabbed"];
+
+    public static IReadOnlyList<(string Key, string Label)> BackdropOptions { get; } =
+    [
+        ("None", "Đặc (Không hiệu ứng)"),
+        ("Blur", "Kính mờ (Blur) – Win10/11"),
+        ("Acrylic", "Acrylic – Win10/11"),
+        ("Mica", "Mica – Win11 (Win10 tự dùng Kính mờ)"),
+        ("Tabbed", "Mica Alt (Tabbed) – Win11 (Win10 tự dùng Kính mờ)")
+    ];
 
     public static IReadOnlyList<(string Name, string Hex)> AccentPresets { get; } =
     [
@@ -67,9 +78,10 @@ public sealed class AppearanceSettingsService : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(window);
         TextElement.SetFontSize(window, Current.BaseFontSize);
-        WindowTransparencyHelper.ApplyOpacityAndBackdrop(
+        AppearancePalette palette = AppearancePaletteBuilder.Build(Current);
+        LastEffectiveMaterial = WindowTransparencyHelper.Apply(
             window,
-            Current.WindowOpacity,
+            palette,
             Current.BackdropType,
             Current.IsDarkMode);
     }
@@ -82,7 +94,9 @@ public sealed class AppearanceSettingsService : ObservableObject
         copy.CardCornerRadius = Math.Round(Math.Clamp(copy.CardCornerRadius, 4.0, 20.0), 0);
         copy.CardPadding = Math.Round(Math.Clamp(copy.CardPadding, 8.0, 28.0), 0);
         copy.SidebarWidth = Math.Round(Math.Clamp(copy.SidebarWidth, 210.0, 340.0), 0);
-        copy.WindowOpacity = Math.Round(Math.Clamp(copy.WindowOpacity, 0.70, 1.00), 2);
+        copy.WindowOpacity = Math.Round(Math.Clamp(copy.WindowOpacity, 0.30, 1.00), 2);
+        copy.CardOpacity = Math.Round(Math.Clamp(copy.CardOpacity, 0.40, 1.00), 2);
+        copy.CardTintStrength = Math.Round(Math.Clamp(copy.CardTintStrength, 0.00, 0.40), 2);
         copy.AccentColorHex = NormalizeHex(copy.AccentColorHex);
         copy.BackdropType = AvailableBackdrops.FirstOrDefault(
             b => string.Equals(b, copy.BackdropType, StringComparison.OrdinalIgnoreCase)) ?? "None";
@@ -97,19 +111,22 @@ public sealed class AppearanceSettingsService : ObservableObject
         }
 
         ApplicationTheme theme = settings.IsDarkMode ? ApplicationTheme.Dark : ApplicationTheme.Light;
-        Color accentColor = ParseColor(settings.AccentColorHex);
+        Color accentColor = AppearancePaletteBuilder.ParseColor(settings.AccentColorHex);
+        bool themeChanged = _lastAppliedDarkMode != settings.IsDarkMode;
 
         // Only reload the heavy WPF-UI Theme dictionary when Dark/Light actually changes so material/sliders never corrupt theme colors.
-        if (_lastAppliedDarkMode != settings.IsDarkMode)
+        if (themeChanged)
         {
             ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: false);
             _lastAppliedDarkMode = settings.IsDarkMode;
         }
 
-        ApplicationAccentColorManager.Apply(accentColor, theme, false, true);
+        ApplicationAccentColorManager.Apply(accentColor, theme, false, false);
 
+        AppearancePalette palette = AppearancePaletteBuilder.Build(settings);
         ResourceDictionary res = Application.Current.Resources;
         res["AppFontSize"] = settings.BaseFontSize;
+        res["ControlContentThemeFontSize"] = settings.BaseFontSize;
         res["AppFontSizeSmall"] = Math.Max(10.0, settings.BaseFontSize - 2.0);
         res["AppFontSizeHeading"] = settings.BaseFontSize + 4.0;
         res["AppFontSizeTitle"] = settings.BaseFontSize + 8.0;
@@ -117,16 +134,32 @@ public sealed class AppearanceSettingsService : ObservableObject
         res["AppCardCornerRadius"] = new CornerRadius(settings.CardCornerRadius);
         res["AppCardPadding"] = new Thickness(settings.CardPadding);
         res["AppSidebarWidth"] = new GridLength(settings.SidebarWidth);
-        res["AppAccentBrush"] = new SolidColorBrush(accentColor);
-
-        Color cardBg = settings.IsDarkMode
-            ? Color.FromRgb(0x25, 0x28, 0x30)
-            : Color.FromRgb(0xFF, 0xFF, 0xFF);
-        res["AppCardBackgroundBrush"] = new SolidColorBrush(cardBg);
+        res["AppWindowBackgroundBrush"] = new SolidColorBrush(palette.WindowSurface);
+        res["AppPanelBackgroundBrush"] = new SolidColorBrush(palette.Panel);
+        res["AppCardBackgroundBrush"] = new SolidColorBrush(palette.Card);
+        res["AppCardInnerBackgroundBrush"] = new SolidColorBrush(palette.CardInner);
+        res["AppCardBorderBrush"] = new SolidColorBrush(palette.CardBorder);
+        res["AppAccentBrush"] = new SolidColorBrush(palette.Accent);
 
         foreach (Window win in Application.Current.Windows)
         {
             ApplyToWindow(win);
+        }
+
+        if (themeChanged)
+        {
+            Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+            {
+                if (Application.Current is null)
+                {
+                    return;
+                }
+
+                foreach (Window win in Application.Current.Windows)
+                {
+                    ApplyToWindow(win);
+                }
+            });
         }
     }
 

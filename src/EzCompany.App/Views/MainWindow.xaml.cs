@@ -1,12 +1,12 @@
 using System.Windows;
+using EzCompany.App.Controls;
 using EzCompany.App.Services;
 using EzCompany.App.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
-using Wpf.Ui.Controls;
 
 namespace EzCompany.App.Views;
 
-public partial class MainWindow : FluentWindow
+public partial class MainWindow : EzFluentWindow
 {
     private readonly IServiceProvider _services;
 

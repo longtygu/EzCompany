@@ -62,6 +62,7 @@ public sealed class LocalStoragePaths : ILocalStoragePaths
         Directory.CreateDirectory(Path.Combine(VaultDirectory, "Office"));
         Directory.CreateDirectory(Path.Combine(VaultDirectory, "Tasks"));
         Directory.CreateDirectory(Path.Combine(VaultDirectory, "Chat"));
+        Directory.CreateDirectory(Path.Combine(VaultDirectory, "Chat", "Stickers"));
         Directory.CreateDirectory(Path.Combine(VaultDirectory, "HR"));
         Directory.CreateDirectory(DirectorCacheDirectory);
         Directory.CreateDirectory(Path.Combine(DirectorCacheDirectory, "Snapshots"));

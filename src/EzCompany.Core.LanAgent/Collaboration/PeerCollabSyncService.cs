@@ -21,6 +21,8 @@ public sealed class PeerCollabSyncService : BackgroundService
     private readonly ILocalStoragePaths _paths;
     private readonly ISessionContext _session;
     private readonly ILogger<PeerCollabSyncService> _logger;
+    private readonly SemaphoreSlim _syncLock = new(1, 1);
+    private readonly Dictionary<string, DateTimeOffset> _lastPeerChatPullUtc = new(StringComparer.OrdinalIgnoreCase);
 
     public PeerCollabSyncService(
         IDbContextFactory<AppDbContext> appDbFactory,
@@ -40,19 +42,124 @@ public sealed class PeerCollabSyncService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(8));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        long tickCount = 0;
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
             {
-                if (_session.IsAuthenticated)
+                if (!_session.IsAuthenticated)
                 {
-                    await SyncCollaborationOnceAsync(null, stoppingToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                tickCount++;
+                if (!await _syncLock.WaitAsync(0, stoppingToken).ConfigureAwait(false))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    _ = await FlushPendingChatAsync(null, stoppingToken).ConfigureAwait(false);
+
+                    if (tickCount % 2 == 0)
+                    {
+                        await PullRecentChatFromOnlinePeersAsync(stoppingToken).ConfigureAwait(false);
+                    }
+
+                    if (tickCount % 10 == 0)
+                    {
+                        await SyncTimelineAndBrandingOnceAsync(stoppingToken).ConfigureAwait(false);
+                    }
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Periodic collaboration sync tick failed.");
+                }
+                finally
+                {
+                    _syncLock.Release();
                 }
             }
         }
         catch (OperationCanceledException)
         {
+        }
+    }
+
+    private async Task PullRecentChatFromOnlinePeersAsync(CancellationToken ct)
+    {
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        CompanyProfileEntity? company = await db.CompanyProfiles.AsNoTracking().FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (company is null || !company.IsGenesisCompleted)
+        {
+            return;
+        }
+
+        string companyIdStr = company.CompanyId.ToString("D");
+        DiscoveredPeer[] peers = _discovery.GetPeers()
+            .Where(p => string.Equals(p.CompanyId, companyIdStr, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(p.MachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        foreach (DiscoveredPeer peer in peers)
+        {
+            if (!_lastPeerChatPullUtc.TryGetValue(peer.MachineId, out DateTimeOffset sinceUtc))
+            {
+                sinceUtc = DateTimeOffset.UtcNow.AddDays(-7);
+            }
+
+            try
+            {
+                DateTimeOffset queryCutoff = sinceUtc.AddSeconds(-5);
+                _ = await _collabClient.PullChatHistoryFromPeerAsync(peer.Endpoint, queryCutoff, ct).ConfigureAwait(false);
+                _lastPeerChatPullUtc[peer.MachineId] = DateTimeOffset.UtcNow;
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private async Task SyncTimelineAndBrandingOnceAsync(CancellationToken ct)
+    {
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        CompanyProfileEntity? company = await db.CompanyProfiles.AsNoTracking().FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (company is null || !company.IsGenesisCompleted)
+        {
+            return;
+        }
+
+        string companyIdStr = company.CompanyId.ToString("D");
+        DiscoveredPeer[] peers = _discovery.GetPeers()
+            .Where(p => string.Equals(p.CompanyId, companyIdStr, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (!company.IsDirectorNode)
+        {
+            try
+            {
+                _ = await _collabClient.PullCompanyBrandingFromDirectorAsync(null, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
+        foreach (DiscoveredPeer peer in peers)
+        {
+            try
+            {
+                _ = await _collabClient.SyncTimelineWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
         }
     }
 

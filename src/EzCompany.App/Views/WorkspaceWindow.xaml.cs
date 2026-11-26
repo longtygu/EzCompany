@@ -1,25 +1,29 @@
 using System.Windows;
+using EzCompany.App.Controls;
 using EzCompany.App.Services;
 using EzCompany.App.ViewModels;
 using EzCompany.Core.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
-using Wpf.Ui.Controls;
 
 namespace EzCompany.App.Views;
 
-public partial class WorkspaceWindow : FluentWindow
+public partial class WorkspaceWindow : EzFluentWindow
 {
     private readonly IServiceProvider _services;
     private readonly IWorkspaceWindowAccessor _windowAccessor;
+    private readonly ChatNotificationPopupService _chatPopupService;
+    private EventHandler<Guid>? _popupOpenHandler;
 
     public WorkspaceWindow(
         WorkspaceWindowViewModel viewModel,
         IServiceProvider services,
         IWorkspaceWindowAccessor windowAccessor,
-        AppearanceSettingsService appearance)
+        AppearanceSettingsService appearance,
+        ChatNotificationPopupService chatPopupService)
     {
         _services = services;
         _windowAccessor = windowAccessor;
+        _chatPopupService = chatPopupService;
         DataContext = viewModel;
         InitializeComponent();
         appearance.ApplyToWindow(this);
@@ -38,6 +42,7 @@ public partial class WorkspaceWindow : FluentWindow
         {
             Dispatcher.Invoke(() =>
             {
+                _chatPopupService.CloseAllPopups();
                 MainWindow main = _services.GetRequiredService<MainWindow>();
                 if (Application.Current is not null)
                 {
@@ -49,12 +54,35 @@ public partial class WorkspaceWindow : FluentWindow
             });
         };
 
+        _popupOpenHandler = (_, convId) =>
+        {
+            Dispatcher.InvokeAsync(async () =>
+            {
+                if (WindowState == WindowState.Minimized)
+                {
+                    WindowState = WindowState.Normal;
+                }
+
+                Activate();
+                await viewModel.OpenChatConversationAsync(convId);
+            });
+        };
+        _chatPopupService.OpenChatConversationRequested += _popupOpenHandler;
+
         Loaded += async (_, _) =>
         {
             appearance.ApplyToWindow(this);
             _windowAccessor.RegisterWindow(this);
             await viewModel.InitializeWorkspaceAsync();
         };
-        Closed += (_, _) => _windowAccessor.UnregisterWindow(this);
+        Closed += (_, _) =>
+        {
+            if (_popupOpenHandler is not null)
+            {
+                _chatPopupService.OpenChatConversationRequested -= _popupOpenHandler;
+            }
+            _chatPopupService.CloseAllPopups();
+            _windowAccessor.UnregisterWindow(this);
+        };
     }
 }

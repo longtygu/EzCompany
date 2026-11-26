@@ -14,6 +14,7 @@ using Microsoft.Win32;
 namespace EzCompany.App.ViewModels;
 
 public sealed record AccentPresetOption(string Name, string Hex);
+public sealed record BackdropOption(string Key, string Label);
 
 public sealed partial class AccountAndAppearanceViewModel : ObservableObject
 {
@@ -58,12 +59,14 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
         AccentPresets = AppearanceSettingsService.AccentPresets
             .Select(p => new AccentPresetOption(p.Name, p.Hex))
             .ToArray();
-        AvailableBackdrops = AppearanceSettingsService.AvailableBackdrops;
+        BackdropOptions = AppearanceSettingsService.BackdropOptions
+            .Select(b => new BackdropOption(b.Key, b.Label))
+            .ToArray();
     }
 
     public UpdatesSettingsViewModel UpdatesVm { get; }
     public IReadOnlyList<AccentPresetOption> AccentPresets { get; }
-    public IReadOnlyList<string> AvailableBackdrops { get; }
+    public IReadOnlyList<BackdropOption> BackdropOptions { get; }
     public IReadOnlyList<string> LogLevels { get; } = ["ALL", "INF", "WRN", "ERR"];
 
     public ObservableCollection<string> RecentLogLines { get; } = [];
@@ -79,6 +82,8 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     [ObservableProperty] private double _sidebarWidth = 260.0;
     [ObservableProperty] private double _windowOpacity = 1.0;
     [ObservableProperty] private string _backdropType = "None";
+    [ObservableProperty] private double _cardOpacity = 1.0;
+    [ObservableProperty] private double _cardTintStrength = 0.08;
     [ObservableProperty] private string _appearanceStatusMessage = string.Empty;
 
     // Tab 2: Account & Company Logo
@@ -133,6 +138,8 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     partial void OnSidebarWidthChanged(double value) => PushAppearanceChange();
     partial void OnWindowOpacityChanged(double value) => PushAppearanceChange();
     partial void OnBackdropTypeChanged(string value) => PushAppearanceChange();
+    partial void OnCardOpacityChanged(double value) => PushAppearanceChange();
+    partial void OnCardTintStrengthChanged(double value) => PushAppearanceChange();
     partial void OnSelectedLogLevelChanged(string value) => _ = ReloadLogsAsync();
 
     public async Task ChangeCredentialsAsync(string currentPassword, string newPassword, string confirmNewPassword)
@@ -314,6 +321,8 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
             SidebarWidth = s.SidebarWidth;
             WindowOpacity = s.WindowOpacity;
             BackdropType = s.BackdropType;
+            CardOpacity = s.CardOpacity;
+            CardTintStrength = s.CardTintStrength;
         }
         finally
         {
@@ -338,9 +347,12 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
             CardPadding = CardPadding,
             SidebarWidth = SidebarWidth,
             WindowOpacity = WindowOpacity,
-            BackdropType = BackdropType
+            BackdropType = BackdropType,
+            CardOpacity = CardOpacity,
+            CardTintStrength = CardTintStrength
         });
 
         AccentColorHex = applied.AccentColorHex;
+        AppearanceStatusMessage = $"Đã áp dụng trực tiếp. Chất liệu thực tế: {_appearance.LastEffectiveMaterial}";
     }
 }

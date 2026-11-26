@@ -190,13 +190,77 @@ public sealed class ChatService
         return list.OrderBy(m => m.SentAtUtc).TakeLast(limit).ToArray();
     }
 
+    public async Task<IReadOnlyList<ChatMessageEntity>> GetMessagesAfterAsync(
+        Guid conversationId,
+        DateTimeOffset afterSentAtUtc,
+        IReadOnlyCollection<Guid> excludeIds,
+        CancellationToken ct = default)
+    {
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        DateTimeOffset lowerBound = afterSentAtUtc.AddSeconds(-1);
+        List<ChatMessageEntity> candidates = await db.ChatMessages.AsNoTracking()
+            .Where(m => m.ConversationId == conversationId && m.SentAtUtc >= lowerBound)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return candidates
+            .Where(m => !excludeIds.Contains(m.Id) && (m.SentAtUtc > afterSentAtUtc || m.SentAtUtc == afterSentAtUtc))
+            .OrderBy(m => m.SentAtUtc)
+            .ToArray();
+    }
+
+    public async Task<(int Count, DateTimeOffset? LatestSentAtUtc, Guid? LatestMessageId)> GetConversationMarkerAsync(
+        Guid conversationId,
+        CancellationToken ct = default)
+    {
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        int count = await db.ChatMessages.AsNoTracking()
+            .CountAsync(m => m.ConversationId == conversationId, ct)
+            .ConfigureAwait(false);
+
+        if (count == 0)
+        {
+            return (0, null, null);
+        }
+
+        var latest = await db.ChatMessages.AsNoTracking()
+            .Where(m => m.ConversationId == conversationId)
+            .OrderByDescending(m => m.SentAtUtc)
+            .Select(m => new { m.Id, m.SentAtUtc })
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        return (count, latest?.SentAtUtc, latest?.Id);
+    }
+
+    public async Task<DateTimeOffset?> GetGlobalLatestChatActivityUtcAsync(CancellationToken ct = default)
+    {
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        DateTimeOffset? latestMsg = await db.ChatMessages.AsNoTracking()
+            .OrderByDescending(m => m.SentAtUtc)
+            .Select(m => (DateTimeOffset?)m.SentAtUtc)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        DateTimeOffset? latestConv = await db.ChatConversations.AsNoTracking()
+            .OrderByDescending(c => c.UpdatedAtUtc)
+            .Select(c => (DateTimeOffset?)c.UpdatedAtUtc)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (!latestMsg.HasValue) return latestConv;
+        if (!latestConv.HasValue) return latestMsg;
+        return latestMsg.Value >= latestConv.Value ? latestMsg : latestConv;
+    }
+
     public async Task<ChatMessageEntity> SendMessageAsync(
         Guid conversationId,
         string content,
         string? sourceAttachmentPath,
         Guid? linkedTaskId,
         IReadOnlyList<string> targetMachineIds,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string messageType = "Text")
     {
         EnsureSession();
         if (string.IsNullOrWhiteSpace(content) && string.IsNullOrWhiteSpace(sourceAttachmentPath))
@@ -239,6 +303,7 @@ public sealed class ChatService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        string normalizedType = string.IsNullOrWhiteSpace(messageType) ? "Text" : messageType.Trim();
         var msg = new ChatMessageEntity
         {
             Id = Guid.NewGuid(),
@@ -248,6 +313,7 @@ public sealed class ChatService
             SenderUsername = _session.Username,
             SenderFullName = _session.FullName,
             Content = content?.Trim() ?? string.Empty,
+            MessageType = normalizedType,
             AttachmentFileName = savedFileName,
             AttachmentVaultPath = savedRelPath,
             AttachmentSha256 = savedSha,
@@ -267,8 +333,19 @@ public sealed class ChatService
         db.ChatMessages.Add(msg);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        string preview = string.IsNullOrWhiteSpace(msg.Content) ? $"[Tệp: {savedFileName}]" : msg.Content;
-        _eventBus.Publish(new ChatMessageReceivedEvent(conversationId, msg.Id, _session.FullName, preview, now));
+        string preview = string.Equals(normalizedType, "Sticker", StringComparison.OrdinalIgnoreCase)
+            ? $"[Sticker: {(string.IsNullOrWhiteSpace(msg.Content) ? savedFileName : msg.Content)}]"
+            : string.IsNullOrWhiteSpace(msg.Content)
+                ? $"[Tệp: {savedFileName}]"
+                : msg.Content;
+        _eventBus.Publish(new ChatMessageReceivedEvent(
+            conversationId,
+            msg.Id,
+            _session.FullName,
+            preview,
+            now,
+            _paths.MachineId,
+            normalizedType));
         return msg;
     }
 
@@ -382,6 +459,7 @@ public sealed class ChatService
             return false;
         }
 
+        string incomingType = string.IsNullOrWhiteSpace(incomingMsg.MessageType) ? "Text" : incomingMsg.MessageType.Trim();
         db.ChatMessages.Add(new ChatMessageEntity
         {
             Id = incomingMsg.Id,
@@ -391,6 +469,7 @@ public sealed class ChatService
             SenderUsername = incomingMsg.SenderUsername,
             SenderFullName = incomingMsg.SenderFullName,
             Content = incomingMsg.Content,
+            MessageType = incomingType,
             AttachmentFileName = incomingMsg.AttachmentFileName,
             AttachmentVaultPath = savedRelPath,
             AttachmentSha256 = incomingMsg.AttachmentSha256,
@@ -403,15 +482,19 @@ public sealed class ChatService
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         if (!string.Equals(incomingMsg.SenderMachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
         {
-            string preview = string.IsNullOrWhiteSpace(incomingMsg.Content)
-                ? $"[Tệp: {incomingMsg.AttachmentFileName}]"
-                : incomingMsg.Content;
+            string preview = string.Equals(incomingType, "Sticker", StringComparison.OrdinalIgnoreCase)
+                ? $"[Sticker: {(string.IsNullOrWhiteSpace(incomingMsg.Content) ? incomingMsg.AttachmentFileName : incomingMsg.Content)}]"
+                : string.IsNullOrWhiteSpace(incomingMsg.Content)
+                    ? $"[Tệp: {incomingMsg.AttachmentFileName}]"
+                    : incomingMsg.Content;
             _eventBus.Publish(new ChatMessageReceivedEvent(
                 incomingMsg.ConversationId,
                 incomingMsg.Id,
                 incomingMsg.SenderFullName,
                 preview,
-                incomingMsg.SentAtUtc));
+                incomingMsg.SentAtUtc,
+                incomingMsg.SenderMachineId,
+                incomingType));
         }
 
         return true;

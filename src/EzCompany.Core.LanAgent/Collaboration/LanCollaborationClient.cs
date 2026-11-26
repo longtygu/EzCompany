@@ -165,7 +165,8 @@ public sealed class LanCollaborationClient
             AttachmentSizeBytes: msg.AttachmentSizeBytes,
             LinkedTaskId: msg.LinkedTaskId,
             SentAtUtc: msg.SentAtUtc,
-            SenderSignedPolicyJson: senderPolicyJson);
+            SenderSignedPolicyJson: senderPolicyJson,
+            MessageType: string.IsNullOrWhiteSpace(msg.MessageType) ? "Text" : msg.MessageType);
 
         using HttpResponseMessage resp = await SendDevicePostAsync(
             targetEndpoint,
@@ -227,6 +228,7 @@ public sealed class LanCollaborationClient
                 SenderUsername = item.SenderUsername,
                 SenderFullName = item.SenderFullName,
                 Content = item.Content,
+                MessageType = string.IsNullOrWhiteSpace(item.MessageType) ? "Text" : item.MessageType,
                 AttachmentFileName = item.AttachmentFileName,
                 AttachmentSha256 = item.AttachmentSha256,
                 AttachmentSizeBytes = item.AttachmentSizeBytes,
@@ -399,7 +401,10 @@ public sealed class LanCollaborationClient
             record.Status,
             record.Notes,
             record.UpdatedAtUtc,
-            policyJson);
+            policyJson,
+            record.OvertimeHours,
+            record.WorkDayUnits,
+            record.IsManualEntry);
 
         List<string> endpoints = [];
         if (!string.IsNullOrWhiteSpace(overrideEndpoint))
