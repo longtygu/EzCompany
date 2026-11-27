@@ -2,6 +2,21 @@
 
 Tất cả thay đổi đáng chú ý của dự án **Ez Company** được ghi lại tại đây theo chuẩn [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và [Semantic Versioning 2.0.0](https://semver.org/).
 
+## [0.5.0] - 2026-11-27 — Parallel Zoomable Timeline & Editor Window, Window Transparency %, Detachable Drag-to-Dock Chat & Presence Bar
+
+### Added & Changed
+- **Bảng lịch trình & kế hoạch chung (`ParallelTimelineControl` + `TimelineEditorWindow`)**:
+  - Gom toàn bộ cụm tạo/sửa/cập nhật trạng thái/xóa kế hoạch vào cửa sổ riêng `TimelineEditorWindow`, mở bằng nút `+ Tạo kế hoạch / lịch trình`.
+  - Cụm timeline hiển thị sẵn kể cả khi đang trống, thiết kế dạng các đường thẳng ngang song song với các chấm đánh dấu ngày tháng ở trên, đường nét đứt đánh dấu Hôm nay và các thanh kế hoạch kéo dài được tô màu.
+  - Hỗ trợ phóng to/thu nhỏ (`Overview60Days` / `Normal30Days` / `Detailed14Days`), điều hướng thời gian (Lùi / Hôm nay / Tiến) và chuyển đổi nhanh giữa chế độ mặc định **3 đường song song** và mở rộng **5 đường song song**.
+- **Tùy chỉnh độ trong suốt theo `%` (`AccountAndAppearanceView`)**:
+  - Đồng bộ hai chiều phần trăm trong suốt cửa sổ (`0%–70%`) và thẻ (`0%–60%`) qua slider, ô nhập `%` và các nút preset nhanh (`0% / 15% / 30% / 50% / 70%`).
+- **Chat nội bộ (`DetachedChatWindow`, `CreateChatGroupWindow`, `ChatWorkspaceView`)**:
+  - Thêm nút tách cửa sổ chat thành cửa sổ riêng (`DetachedChatWindow`) và tự động thu hồi/gắn lại về cửa sổ chính khi kéo thả vào vùng giao diện chính (`ChatDockGeometry` + `ChatDockCoordinator`, giữ nguyên trạng thái phiên chat trực tiếp).
+  - Đưa luồng tạo nhóm chat mới sang cửa sổ riêng `CreateChatGroupWindow` với bộ lọc tìm thành viên và trạng thái Online/Offline.
+  - Thêm thanh nhân viên phía trên cùng của khung chat với ảnh đại diện tròn (fallback icon `Person24`), chấm sáng xanh nhấp nháy khi Online / đỏ nhấp nháy khi Offline; bấm trực tiếp để mở chat riêng 1-1.
+  - Thay ComboBox chọn người chat riêng bằng ô tìm kiếm nhân viên xổ xuống theo tên hoặc chức vụ (hỗ trợ tìm không dấu tiếng Việt).
+
 ## [0.4.0] - 2026-11-27 — DWM Transparency & Card Tinting Fix, Realtime Chat + Stickers + Popups, Role Sidebar & HR/Payroll Upgrade
 
 ### Sửa lỗi (Fixed)

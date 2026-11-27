@@ -117,7 +117,7 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     [ObservableProperty] private bool _approveOffice = true;
 
     // Release Governance
-    [ObservableProperty] private string _fleetMaxApprovedVersion = "0.4.0";
+    [ObservableProperty] private string _fleetMaxApprovedVersion = "0.5.0";
     [ObservableProperty] private string _fleetAllowedChannel = "stable";
 
     // Snapshot Viewer

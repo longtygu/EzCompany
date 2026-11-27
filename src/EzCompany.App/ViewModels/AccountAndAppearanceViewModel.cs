@@ -81,10 +81,18 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     [ObservableProperty] private double _cardPadding = 16.0;
     [ObservableProperty] private double _sidebarWidth = 260.0;
     [ObservableProperty] private double _windowOpacity = 1.0;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowOpacityPercent))]
+    private int _windowTransparencyPercent;
+    [ObservableProperty] private string _windowTransparencyInput = "0";
     [ObservableProperty] private string _backdropType = "None";
     [ObservableProperty] private double _cardOpacity = 1.0;
+    [ObservableProperty] private int _cardTransparencyPercent;
     [ObservableProperty] private double _cardTintStrength = 0.08;
     [ObservableProperty] private string _appearanceStatusMessage = string.Empty;
+
+    public int WindowOpacityPercent => 100 - WindowTransparencyPercent;
+    private bool _syncingPercent;
 
     // Tab 2: Account & Company Logo
     [ObservableProperty] private string _fullName = string.Empty;
@@ -136,9 +144,72 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     partial void OnCardCornerRadiusChanged(double value) => PushAppearanceChange();
     partial void OnCardPaddingChanged(double value) => PushAppearanceChange();
     partial void OnSidebarWidthChanged(double value) => PushAppearanceChange();
-    partial void OnWindowOpacityChanged(double value) => PushAppearanceChange();
+    partial void OnWindowOpacityChanged(double value)
+    {
+        if (!_syncingPercent)
+        {
+            _syncingPercent = true;
+            int pct = Math.Clamp((int)Math.Round((1.0 - value) * 100.0), 0, 70);
+            WindowTransparencyPercent = pct;
+            WindowTransparencyInput = pct.ToString();
+            _syncingPercent = false;
+        }
+
+        PushAppearanceChange();
+    }
+
+    partial void OnWindowTransparencyPercentChanged(int value)
+    {
+        if (_syncingPercent)
+        {
+            return;
+        }
+
+        _syncingPercent = true;
+        int clamped = Math.Clamp(value, 0, 70);
+        if (clamped != value)
+        {
+            WindowTransparencyPercent = clamped;
+        }
+
+        WindowTransparencyInput = clamped.ToString();
+        WindowOpacity = Math.Round(1.0 - clamped / 100.0, 2);
+        _syncingPercent = false;
+        PushAppearanceChange();
+    }
+
+    partial void OnCardOpacityChanged(double value)
+    {
+        if (!_syncingPercent)
+        {
+            _syncingPercent = true;
+            CardTransparencyPercent = Math.Clamp((int)Math.Round((1.0 - value) * 100.0), 0, 60);
+            _syncingPercent = false;
+        }
+
+        PushAppearanceChange();
+    }
+
+    partial void OnCardTransparencyPercentChanged(int value)
+    {
+        if (_syncingPercent)
+        {
+            return;
+        }
+
+        _syncingPercent = true;
+        int clamped = Math.Clamp(value, 0, 60);
+        if (clamped != value)
+        {
+            CardTransparencyPercent = clamped;
+        }
+
+        CardOpacity = Math.Round(1.0 - clamped / 100.0, 2);
+        _syncingPercent = false;
+        PushAppearanceChange();
+    }
+
     partial void OnBackdropTypeChanged(string value) => PushAppearanceChange();
-    partial void OnCardOpacityChanged(double value) => PushAppearanceChange();
     partial void OnCardTintStrengthChanged(double value) => PushAppearanceChange();
     partial void OnSelectedLogLevelChanged(string value) => _ = ReloadLogsAsync();
 
@@ -243,6 +314,28 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void SetWindowTransparencyPreset(string? percentText)
+    {
+        if (int.TryParse(percentText, out int pct))
+        {
+            WindowTransparencyPercent = Math.Clamp(pct, 0, 70);
+        }
+    }
+
+    [RelayCommand]
+    private void ApplyWindowTransparencyInput()
+    {
+        if (int.TryParse(WindowTransparencyInput?.Trim().TrimEnd('%'), out int pct))
+        {
+            WindowTransparencyPercent = Math.Clamp(pct, 0, 70);
+        }
+        else
+        {
+            AppearanceStatusMessage = "Vui lòng nhập số % độ trong suốt hợp lệ (từ 0 đến 70).";
+        }
+    }
+
+    [RelayCommand]
     private void ResetAppearance()
     {
         AppearanceSettings defaults = _appearance.ResetToDefaults();
@@ -310,6 +403,7 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     private void SyncAppearanceFields(AppearanceSettings s)
     {
         _suppressLiveApply = true;
+        _syncingPercent = true;
         try
         {
             IsDarkMode = s.IsDarkMode;
@@ -320,12 +414,17 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
             CardPadding = s.CardPadding;
             SidebarWidth = s.SidebarWidth;
             WindowOpacity = s.WindowOpacity;
+            int winPct = Math.Clamp((int)Math.Round((1.0 - s.WindowOpacity) * 100.0), 0, 70);
+            WindowTransparencyPercent = winPct;
+            WindowTransparencyInput = winPct.ToString();
             BackdropType = s.BackdropType;
             CardOpacity = s.CardOpacity;
+            CardTransparencyPercent = Math.Clamp((int)Math.Round((1.0 - s.CardOpacity) * 100.0), 0, 60);
             CardTintStrength = s.CardTintStrength;
         }
         finally
         {
+            _syncingPercent = false;
             _suppressLiveApply = false;
         }
     }

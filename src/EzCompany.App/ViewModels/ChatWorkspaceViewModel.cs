@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -22,6 +24,34 @@ public sealed partial class SelectablePeerMember : ObservableObject
     public required string FullName { get; init; }
     public required string RoleDisplay { get; init; }
     [ObservableProperty] private bool _isSelected;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    private bool _isOnline;
+    public bool IsOffline => !IsOnline;
+}
+
+public sealed partial class ChatPeerPresenceItem : ObservableObject
+{
+    public required string MachineId { get; init; }
+    public required string Username { get; init; }
+    public required string FullName { get; init; }
+    public required string ShortName { get; init; }
+    public required string RoleRaw { get; init; }
+    public required string RoleBilingual { get; init; }
+    public string? Endpoint { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    [NotifyPropertyChangedFor(nameof(ToolTipText))]
+    private bool _isOnline;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAvatarImage))]
+    private BitmapImage? _avatarImage;
+
+    public bool IsOffline => !IsOnline;
+    public bool HasAvatarImage => AvatarImage is not null;
+    public string ToolTipText => $"{FullName} ({RoleBilingual}) — {(IsOnline ? "Đang Online" : "Offline")} • Bấm để chat riêng";
 }
 
 public sealed class CustomStickerViewItem
@@ -96,6 +126,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
     private DateTimeOffset? _lastGlobalActivityUtc;
     private Guid? _pendingSelectConversationId;
     private bool _isLoadingMessages;
+    private int _pollTickCounter;
 
     public ChatWorkspaceViewModel(
         ChatService chatService,
@@ -124,22 +155,31 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
 
     public ObservableCollection<ChatConversationListItem> Conversations { get; } = [];
     public ObservableCollection<ChatMessageDisplayItem> Messages { get; } = [];
-    public ObservableCollection<PeerDirectoryEntryDto> Peers { get; } = [];
-    public ObservableCollection<SelectablePeerMember> GroupMemberChoices { get; } = [];
+    public ObservableCollection<ChatPeerPresenceItem> PeerPresenceItems { get; } = [];
+    public ObservableCollection<ChatPeerPresenceItem> FilteredPeerSearchResults { get; } = [];
     public ObservableCollection<WorkTaskEntity> PinnableTasks { get; } = [];
     public ObservableCollection<CustomStickerViewItem> Stickers { get; } = [];
 
     [ObservableProperty] private ChatConversationListItem? _selectedConversation;
-    [ObservableProperty] private PeerDirectoryEntryDto? _selectedDirectPeer;
-    [ObservableProperty] private string _newGroupName = string.Empty;
+    [ObservableProperty] private string _peerSearchQuery = string.Empty;
+    [ObservableProperty] private bool _isPeerSearchDropdownOpen;
+    [ObservableProperty] private string _onlinePeersSummary = "0/0 online";
     [ObservableProperty] private WorkTaskEntity? _selectedTaskToPin;
     [ObservableProperty] private string _messageDraft = string.Empty;
     [ObservableProperty] private string _draftAttachmentPath = string.Empty;
     [ObservableProperty] private string _statusBanner = string.Empty;
     [ObservableProperty] private bool _isStickerTrayOpen;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetachButtonText))]
+    private bool _isDetachedWindow;
+
+    public string DetachButtonText => IsDetachedWindow ? "↙ Gắn về cửa sổ chính" : "↗ Tách cửa sổ";
+
     public event EventHandler? RefreshRequested;
     public event EventHandler? ScrollToBottomRequested;
+    public event EventHandler? OpenCreateGroupWindowRequested;
+    public event EventHandler? ToggleDetachRequested;
 
     [RelayCommand]
     public async Task RefreshAllAsync()
@@ -152,20 +192,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         SelectedConversation = Conversations.FirstOrDefault(c => c.Id == prevConvId)
                                ?? Conversations.FirstOrDefault();
 
-        IReadOnlyList<PeerDirectoryEntryDto> peers = await _taskClient.GetCompanyPeerDirectoryAsync();
-        Peers.Clear();
-        GroupMemberChoices.Clear();
-        foreach (PeerDirectoryEntryDto p in peers.Where(x => !string.Equals(x.MachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase)))
-        {
-            Peers.Add(p);
-            GroupMemberChoices.Add(new SelectablePeerMember
-            {
-                MachineId = p.MachineId,
-                FullName = p.FullName,
-                RoleDisplay = CompanyRoles.FormatRolesBilingual(p.Role)
-            });
-        }
-        SelectedDirectPeer ??= Peers.FirstOrDefault();
+        await RefreshPeerPresenceAsync();
 
         IReadOnlyList<WorkTaskEntity> inbox = await _taskService.GetAssignedToMeTasksAsync(includeCompleted: true);
         IReadOnlyList<WorkTaskEntity> outbox = await _taskService.GetAssignedByMeTasksAsync();
@@ -190,6 +217,12 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
 
         try
         {
+            _pollTickCounter++;
+            if (_pollTickCounter % 2 == 0)
+            {
+                await RefreshPeerPresenceAsync();
+            }
+
             DateTimeOffset? latestActivity = await _chatService.GetGlobalLatestChatActivityUtcAsync();
             if (_lastGlobalActivityUtc.HasValue && latestActivity == _lastGlobalActivityUtc)
             {
@@ -216,6 +249,127 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         {
             _pollLock.Release();
         }
+    }
+
+    public async Task RefreshPeerPresenceAsync()
+    {
+        IReadOnlyList<PeerDirectoryEntryDto> peers = await _taskClient.GetCompanyPeerDirectoryAsync();
+        PeerDirectoryEntryDto[] remotePeers = peers
+            .Where(x => !string.Equals(x.MachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.IsOnline)
+            .ThenBy(x => x.FullName)
+            .ToArray();
+
+        var existingById = PeerPresenceItems.ToDictionary(p => p.MachineId, StringComparer.OrdinalIgnoreCase);
+        bool setChanged = existingById.Count != remotePeers.Length ||
+                          remotePeers.Any(r => !existingById.ContainsKey(r.MachineId));
+
+        if (!setChanged)
+        {
+            foreach (PeerDirectoryEntryDto p in remotePeers)
+            {
+                ChatPeerPresenceItem item = existingById[p.MachineId];
+                item.IsOnline = p.IsOnline;
+                item.Endpoint = p.Endpoint;
+            }
+        }
+        else
+        {
+            PeerPresenceItems.Clear();
+            foreach (PeerDirectoryEntryDto p in remotePeers)
+            {
+                PeerPresenceItems.Add(new ChatPeerPresenceItem
+                {
+                    MachineId = p.MachineId,
+                    Username = p.Username,
+                    FullName = p.FullName,
+                    ShortName = ExtractShortName(p.FullName),
+                    RoleRaw = p.Role,
+                    RoleBilingual = CompanyRoles.FormatRolesBilingual(p.Role),
+                    Endpoint = p.Endpoint,
+                    IsOnline = p.IsOnline,
+                    AvatarImage = null
+                });
+            }
+
+            UpdatePeerSearchFilter();
+        }
+
+        int onlineCount = PeerPresenceItems.Count(p => p.IsOnline);
+        OnlinePeersSummary = $"{onlineCount}/{PeerPresenceItems.Count} online";
+    }
+
+    partial void OnPeerSearchQueryChanged(string value) => UpdatePeerSearchFilter();
+
+    private void UpdatePeerSearchFilter()
+    {
+        IReadOnlyList<ChatPeerPresenceItem> matches = FilterPeersByQuery(PeerPresenceItems, PeerSearchQuery);
+        FilteredPeerSearchResults.Clear();
+        foreach (ChatPeerPresenceItem item in matches)
+        {
+            FilteredPeerSearchResults.Add(item);
+        }
+
+        IsPeerSearchDropdownOpen = !string.IsNullOrWhiteSpace(PeerSearchQuery) && FilteredPeerSearchResults.Count > 0;
+    }
+
+    public static IReadOnlyList<ChatPeerPresenceItem> FilterPeersByQuery(
+        IEnumerable<ChatPeerPresenceItem> source,
+        string? query)
+    {
+        string normalizedQuery = NormalizeForSearch(query);
+        if (string.IsNullOrEmpty(normalizedQuery))
+        {
+            return [];
+        }
+
+        return source
+            .Where(p =>
+                NormalizeForSearch(p.FullName).Contains(normalizedQuery, StringComparison.Ordinal) ||
+                NormalizeForSearch(p.Username).Contains(normalizedQuery, StringComparison.Ordinal) ||
+                NormalizeForSearch(p.RoleRaw).Contains(normalizedQuery, StringComparison.Ordinal) ||
+                NormalizeForSearch(p.RoleBilingual).Contains(normalizedQuery, StringComparison.Ordinal))
+            .OrderByDescending(p => p.IsOnline)
+            .ThenBy(p => p.FullName)
+            .ToArray();
+    }
+
+    public static string NormalizeForSearch(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        string decomposed = text.Trim().Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(decomposed.Length);
+        foreach (char ch in decomposed)
+        {
+            UnicodeCategory uc = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (uc != UnicodeCategory.NonSpacingMark)
+            {
+                char mapped = ch switch
+                {
+                    'đ' => 'd',
+                    'Đ' => 'D',
+                    _ => char.ToLowerInvariant(ch)
+                };
+                sb.Append(mapped);
+            }
+        }
+
+        return sb.ToString().Normalize(NormalizationForm.FormC);
+    }
+
+    private static string ExtractShortName(string fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return "NV";
+        }
+
+        string[] parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length > 0 ? parts[^1] : fullName;
     }
 
     public async Task SelectConversationByIdAsync(Guid conversationId)
@@ -390,12 +544,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         try
         {
             bool ok = await _collabClient.ReverseDownloadChatAttachmentAsync(item.Id);
-            if (!ok)
-            {
-                return;
-            }
-
-            if (SelectedConversation is null)
+            if (!ok || SelectedConversation is null)
             {
                 return;
             }
@@ -440,6 +589,47 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
                 PreviewImage = CustomStickerService.LoadBitmapFrozen(st.FullPath, 128)
             });
         }
+    }
+
+    [RelayCommand]
+    private async Task StartDirectChatWithPeerAsync(ChatPeerPresenceItem? peer)
+    {
+        if (peer is null)
+        {
+            return;
+        }
+
+        PeerSearchQuery = string.Empty;
+        IsPeerSearchDropdownOpen = false;
+
+        ChatConversationEntity conv = await _chatService.GetOrCreateDirectConversationAsync(
+            peer.MachineId,
+            peer.FullName);
+
+        await RefreshAllAsync();
+        SelectedConversation = Conversations.FirstOrDefault(c => c.Id == conv.Id);
+        StatusBanner = $"Đang trò chuyện riêng với {peer.FullName} ({peer.RoleBilingual}).";
+    }
+
+    [RelayCommand]
+    private void RequestOpenCreateGroupWindow() => OpenCreateGroupWindowRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void ToggleDetachChatWindow() => ToggleDetachRequested?.Invoke(this, EventArgs.Empty);
+
+    public async Task CreateGroupWithMembersAsync(
+        string groupName,
+        IReadOnlyList<(string MachineId, string FullName)> members)
+    {
+        if (string.IsNullOrWhiteSpace(groupName))
+        {
+            return;
+        }
+
+        ChatConversationEntity conv = await _chatService.CreateGroupConversationAsync(groupName, members);
+        await RefreshAllAsync();
+        SelectedConversation = Conversations.FirstOrDefault(c => c.Id == conv.Id);
+        StatusBanner = $"Đã tạo nhóm chat '{conv.Name}'.";
     }
 
     [RelayCommand]
@@ -506,43 +696,6 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         _ = await _collabSync.FlushPendingChatAsync();
         await AppendSingleOrRefreshAsync(sent);
         StatusBanner = $"Đã gửi sticker '{item.Name}'.";
-    }
-
-    [RelayCommand]
-    private async Task StartDirectChatAsync()
-    {
-        if (SelectedDirectPeer is null)
-        {
-            StatusBanner = "Chọn đồng nghiệp để bắt đầu chat riêng.";
-            return;
-        }
-
-        ChatConversationEntity conv = await _chatService.GetOrCreateDirectConversationAsync(
-            SelectedDirectPeer.MachineId,
-            SelectedDirectPeer.FullName);
-        await RefreshAllAsync();
-        SelectedConversation = Conversations.FirstOrDefault(c => c.Id == conv.Id);
-    }
-
-    [RelayCommand]
-    private async Task CreateGroupAsync()
-    {
-        if (string.IsNullOrWhiteSpace(NewGroupName))
-        {
-            StatusBanner = "Nhập tên nhóm chat trước khi tạo.";
-            return;
-        }
-
-        List<(string MachineId, string FullName)> selected = GroupMemberChoices
-            .Where(m => m.IsSelected)
-            .Select(m => (m.MachineId, m.FullName))
-            .ToList();
-
-        ChatConversationEntity conv = await _chatService.CreateGroupConversationAsync(NewGroupName, selected);
-        NewGroupName = string.Empty;
-        await RefreshAllAsync();
-        SelectedConversation = Conversations.FirstOrDefault(c => c.Id == conv.Id);
-        StatusBanner = $"Đã tạo nhóm chat '{conv.Name}'.";
     }
 
     [RelayCommand]
@@ -653,7 +806,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
     private async Task ReversePullHistoryFromLanAsync()
     {
         int totalPulled = 0;
-        foreach (PeerDirectoryEntryDto peer in Peers.Where(p => p.IsOnline && !string.IsNullOrWhiteSpace(p.Endpoint)))
+        foreach (ChatPeerPresenceItem peer in PeerPresenceItems.Where(p => p.IsOnline && !string.IsNullOrWhiteSpace(p.Endpoint)))
         {
             try
             {

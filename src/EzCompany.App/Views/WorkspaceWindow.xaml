@@ -223,7 +223,50 @@
                     Background="{DynamicResource AppPanelBackgroundBrush}"
                     BorderThickness="1"
                     BorderBrush="{DynamicResource AppCardBorderBrush}">
-                <ContentControl Content="{Binding ActiveView}" />
+                <Grid>
+                    <ContentControl Content="{Binding ActiveView}" />
+
+                    <!-- Detached Chat Placeholder when Chat is popped out -->
+                    <StackPanel VerticalAlignment="Center"
+                                HorizontalAlignment="Center"
+                                MaxWidth="460"
+                                Visibility="{Binding IsChatDetachedPlaceholderVisible, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Chat nội bộ đang mở ở cửa sổ riêng"
+                                   FontSize="{DynamicResource AppFontSizeHeading}"
+                                   FontWeight="Bold"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="Bạn có thể kéo cửa sổ Chat thả lại vào cửa sổ chính này hoặc bấm nút bên dưới để gắn lại ngay."
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   Opacity="0.8"
+                                   Margin="0,8,0,16" />
+                        <ui:Button Appearance="Primary"
+                                   Content="↙ Gắn Chat về cửa sổ chính"
+                                   HorizontalAlignment="Center"
+                                   Command="{Binding RedockChatToMainCommand}" />
+                    </StackPanel>
+
+                    <!-- Drag-and-Drop Redock Visual Indicator -->
+                    <Border CornerRadius="{DynamicResource AppCardCornerRadius}"
+                            BorderThickness="3"
+                            BorderBrush="{DynamicResource AppAccentBrush}"
+                            Background="#550078D4"
+                            IsHitTestVisible="False"
+                            Visibility="{Binding IsChatDockDropHighlightVisible, Converter={StaticResource BoolToVis}}">
+                        <Border Padding="20,12"
+                                CornerRadius="10"
+                                Background="{DynamicResource AppCardBackgroundBrush}"
+                                BorderThickness="1.5"
+                                BorderBrush="{DynamicResource AppAccentBrush}"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="⬇ Thả cửa sổ Chat vào đây để tự động gắn về cửa sổ chính"
+                                       FontSize="{DynamicResource AppFontSizeHeading}"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource AppAccentBrush}" />
+                        </Border>
+                    </Border>
+                </Grid>
             </Border>
         </Grid>
     </Grid>

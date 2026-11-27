@@ -108,11 +108,44 @@
                                         <TextBlock Text="{Binding CardPadding, StringFormat='Khoảng đệm bên trong thẻ: {0:F0} px'}" Margin="0,4,0,2" />
                                         <Slider Minimum="8" Maximum="28" TickFrequency="2" IsSnapToTickEnabled="True" Value="{Binding CardPadding}" Margin="0,0,0,8" />
 
-                                        <TextBlock Text="{Binding WindowOpacity, StringFormat='Độ đậm nền cửa sổ: {0:P0} (giảm để trong suốt)'}" Margin="0,4,0,2" />
-                                        <Slider Minimum="0.30" Maximum="1.00" TickFrequency="0.05" IsSnapToTickEnabled="True" Value="{Binding WindowOpacity}" Margin="0,0,0,8" />
+                                        <TextBlock Margin="0,4,0,2">
+                                            <Run Text="Độ trong suốt cửa sổ: " />
+                                            <Run Text="{Binding WindowTransparencyPercent, Mode=OneWay}" FontWeight="Bold" />
+                                            <Run Text="%  (Độ đậm nền: " />
+                                            <Run Text="{Binding WindowOpacityPercent, Mode=OneWay}" />
+                                            <Run Text="%)" />
+                                        </TextBlock>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="62" />
+                                                <ColumnDefinition Width="4" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="6" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Slider Grid.Column="0"
+                                                    Minimum="0"
+                                                    Maximum="70"
+                                                    TickFrequency="1"
+                                                    IsSnapToTickEnabled="True"
+                                                    VerticalAlignment="Center"
+                                                    Value="{Binding WindowTransparencyPercent}" />
+                                            <ui:TextBox Grid.Column="2" Text="{Binding WindowTransparencyInput, UpdateSourceTrigger=PropertyChanged}" />
+                                            <TextBlock Grid.Column="4" Text="%" VerticalAlignment="Center" />
+                                            <ui:Button Grid.Column="6" Content="Áp %" Command="{Binding ApplyWindowTransparencyInputCommand}" Padding="8,4" />
+                                        </Grid>
+                                        <WrapPanel Margin="0,0,0,8">
+                                            <ui:Button Content="0% (Đặc)" Command="{Binding SetWindowTransparencyPresetCommand}" CommandParameter="0" Padding="8,3" Margin="0,0,4,0" />
+                                            <ui:Button Content="15%" Command="{Binding SetWindowTransparencyPresetCommand}" CommandParameter="15" Padding="8,3" Margin="0,0,4,0" />
+                                            <ui:Button Content="30%" Command="{Binding SetWindowTransparencyPresetCommand}" CommandParameter="30" Padding="8,3" Margin="0,0,4,0" />
+                                            <ui:Button Content="50%" Command="{Binding SetWindowTransparencyPresetCommand}" CommandParameter="50" Padding="8,3" Margin="0,0,4,0" />
+                                            <ui:Button Content="70%" Command="{Binding SetWindowTransparencyPresetCommand}" CommandParameter="70" Padding="8,3" />
+                                        </WrapPanel>
 
-                                        <TextBlock Text="{Binding CardOpacity, StringFormat='Độ đậm của thẻ: {0:P0}'}" Margin="0,4,0,2" />
-                                        <Slider Minimum="0.40" Maximum="1.00" TickFrequency="0.05" IsSnapToTickEnabled="True" Value="{Binding CardOpacity}" Margin="0,0,0,8" />
+                                        <TextBlock Text="{Binding CardTransparencyPercent, StringFormat='Độ trong suốt của thẻ: {0}%'}" Margin="0,4,0,2" />
+                                        <Slider Minimum="0" Maximum="60" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding CardTransparencyPercent}" Margin="0,0,0,8" />
 
                                         <TextBlock Text="{Binding CardTintStrength, StringFormat='Pha màu chủ đề vào thẻ: {0:P0}'}" Margin="0,4,0,2" />
                                         <Slider Minimum="0.00" Maximum="0.40" TickFrequency="0.02" IsSnapToTickEnabled="True" Value="{Binding CardTintStrength}" />

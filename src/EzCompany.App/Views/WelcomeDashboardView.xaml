@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:controls="clr-namespace:EzCompany.App.Controls"
              x:Name="RootControl">
     <ScrollViewer Padding="20" VerticalScrollBarVisibility="Auto">
         <StackPanel MaxWidth="{DynamicResource AppCardMaxWidth}" HorizontalAlignment="Center">
@@ -66,7 +67,7 @@
                 <!-- Tab 1: General Overview + Shared Timeline + Tasks -->
                 <TabItem Header="Tổng quan chung &amp; Lịch trình">
                     <StackPanel Margin="0,14,0,0">
-                        <!-- Shared Schedule / Timeline Table (Visible & Editable by Everyone) -->
+                        <!-- Shared Horizontal Parallel Schedule / Timeline -->
                         <Border Padding="{DynamicResource AppCardPadding}"
                                 Margin="0,0,0,16"
                                 CornerRadius="{DynamicResource AppCardCornerRadius}"
@@ -74,81 +75,50 @@
                                 BorderThickness="1"
                                 BorderBrush="{DynamicResource AppCardBorderBrush}">
                             <StackPanel>
-                                <TextBlock Text="Bảng Lịch trình &amp; Kế hoạch chung (Giám đốc &amp; Nhân viên cùng bổ sung)"
-                                           FontSize="{DynamicResource AppFontSizeHeading}"
-                                           FontWeight="SemiBold"
-                                           Margin="0,0,0,10" />
-
-                                <Grid Margin="0,0,0,8">
+                                <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="120" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="130" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="130" />
-                                    </Grid.ColumnDefinitions>
-                                    <ui:TextBox Grid.Column="0" Text="{Binding NewPlanTitle, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Tên sự kiện / mốc kế hoạch / lịch trình..." />
-                                    <ComboBox Grid.Column="2" ItemsSource="{Binding AvailableTimelineCategories}" SelectedItem="{Binding NewPlanCategory}" />
-                                    <DatePicker Grid.Column="4" SelectedDate="{Binding NewPlanStartDate}" />
-                                    <DatePicker Grid.Column="6" SelectedDate="{Binding NewPlanEndDate}" />
-                                </Grid>
-
-                                <Grid Margin="0,0,0,12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="8" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <ui:TextBox Grid.Column="0" Text="{Binding NewPlanDescription, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Mô tả chi tiết kế hoạch..." />
-                                    <ui:Button Grid.Column="2" Appearance="Primary" Content="Bổ sung vào Lịch trình" Command="{Binding AddTimelinePlanCommand}" />
+                                    <StackPanel>
+                                        <TextBlock Text="Bảng Lịch trình &amp; Kế hoạch chung"
+                                                   FontSize="{DynamicResource AppFontSizeHeading}"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding TimelineZoomLabel, StringFormat='Chế độ xem: {0}'}"
+                                                   FontSize="11.5"
+                                                   Opacity="0.72" />
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="1"
+                                               Appearance="Primary"
+                                               Content="+ Tạo kế hoạch / lịch trình"
+                                               Command="{Binding OpenTimelineEditorCommand}" />
                                 </Grid>
 
-                                <ItemsControl ItemsSource="{Binding TimelinePlans}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Margin="0,0,0,8"
-                                                    Padding="10,8"
-                                                    CornerRadius="8"
-                                                    Background="{DynamicResource AppCardInnerBackgroundBrush}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <ui:Button Grid.Column="0"
-                                                               Margin="0,0,10,0"
-                                                               Padding="8,4"
-                                                               Content="{Binding Status}"
-                                                               Command="{Binding DataContext.CycleTimelinePlanStatusCommand, ElementName=RootControl}"
-                                                               CommandParameter="{Binding}"
-                                                               ToolTip="Bấm để chuyển Planned -> InProgress -> Done" />
-                                                    <StackPanel Grid.Column="1">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Margin="0,0,8,0" />
-                                                            <TextBlock Text="{Binding Category, StringFormat='[{0}]'}" Foreground="{DynamicResource AppAccentBrush}" FontSize="12" Margin="0,0,8,0" />
-                                                            <TextBlock Text="{Binding CreatedByFullName, StringFormat='bởi {0}'}" FontSize="12" Opacity="0.7" />
-                                                        </StackPanel>
-                                                        <TextBlock Text="{Binding Description}" FontSize="12" Opacity="0.82" TextWrapping="Wrap" Margin="0,2,0,0" Visibility="{Binding Description, Converter={StaticResource NotEmptyToVis}}" />
-                                                        <TextBlock FontSize="11" Opacity="0.65" Margin="0,2,0,0">
-                                                            <Run Text="Từ " />
-                                                            <Run Text="{Binding StartDateUtc, StringFormat=dd/MM/yyyy}" />
-                                                            <Run Text=" đến " />
-                                                            <Run Text="{Binding EndDateUtc, StringFormat=dd/MM/yyyy}" />
-                                                        </TextBlock>
-                                                    </StackPanel>
-                                                    <ui:Button Grid.Column="2"
-                                                               Appearance="Transparent"
-                                                               Content="Xóa"
-                                                               Command="{Binding DataContext.DeleteTimelinePlanCommand, ElementName=RootControl}"
-                                                               CommandParameter="{Binding}" />
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <WrapPanel Margin="0,0,0,10">
+                                    <ui:Button Content="◀ Trước" Command="{Binding ShiftTimelineBackwardCommand}" Padding="10,5" Margin="0,0,6,4" />
+                                    <ui:Button Content="Hôm nay" Command="{Binding JumpTimelineTodayCommand}" Padding="10,5" Margin="0,0,6,4" />
+                                    <ui:Button Content="Sau ▶" Command="{Binding ShiftTimelineForwardCommand}" Padding="10,5" Margin="0,0,14,4" />
+                                    <ui:Button Content="Thu nhỏ (−)" Command="{Binding ZoomOutTimelineCommand}" Padding="10,5" Margin="0,0,6,4" />
+                                    <ui:Button Content="Mặc định" Command="{Binding ResetTimelineZoomCommand}" Padding="10,5" Margin="0,0,6,4" />
+                                    <ui:Button Content="Phóng to (+)" Command="{Binding ZoomInTimelineCommand}" Padding="10,5" Margin="0,0,14,4" />
+                                    <ui:Button Appearance="Secondary" Content="{Binding TimelineTrackToggleLabel}" Command="{Binding ToggleTimelineTracksCommand}" Padding="12,5" Margin="0,0,0,4" />
+                                </WrapPanel>
+
+                                <Border Padding="8,10"
+                                        CornerRadius="10"
+                                        Background="{DynamicResource AppCardInnerBackgroundBrush}"
+                                        BorderThickness="1"
+                                        BorderBrush="{DynamicResource AppCardBorderBrush}">
+                                    <controls:ParallelTimelineControl x:Name="ParallelTimeline"
+                                                                      LayoutResult="{Binding TimelineLayout}"
+                                                                      PlanClicked="ParallelTimeline_PlanClicked" />
+                                </Border>
+
+                                <TextBlock Text="{Binding TimelineSummaryText}"
+                                           FontSize="11.5"
+                                           Opacity="0.78"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0" />
                             </StackPanel>
                         </Border>
 

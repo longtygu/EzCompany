@@ -169,6 +169,7 @@ public static class Program
                 services.AddSingleton<ThemeService>();
                 services.AddSingleton<CustomStickerService>();
                 services.AddSingleton<ChatNotificationPopupService>();
+                services.AddSingleton<ChatDockCoordinator>();
                 services.AddSingleton<AppDiagnosticsAndRepairService>();
                 services.AddSingleton<AttendanceExcelExporter>();
                 services.AddSingleton<ReadOnlyDbInspectorService>();
@@ -178,10 +179,14 @@ public static class Program
                 services.AddTransient<WorkspaceWindow>();
                 services.AddTransient<WelcomeDashboardViewModel>();
                 services.AddTransient<WelcomeDashboardView>();
+                services.AddTransient<TimelineEditorViewModel>();
+                services.AddTransient<TimelineEditorWindow>();
                 services.AddTransient<TaskManagementViewModel>();
                 services.AddTransient<TaskManagementView>();
                 services.AddTransient<ChatWorkspaceViewModel>();
                 services.AddTransient<ChatWorkspaceView>();
+                services.AddTransient<CreateChatGroupWindow>();
+                services.AddTransient<DetachedChatWindow>();
                 services.AddTransient<HrAttendanceViewModel>();
                 services.AddTransient<HrAttendanceView>();
                 services.AddTransient<AttendanceDetailViewModel>();

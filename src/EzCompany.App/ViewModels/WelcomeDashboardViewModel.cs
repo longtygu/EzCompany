@@ -71,7 +71,6 @@ public sealed partial class WelcomeDashboardViewModel : ObservableObject
     public ObservableCollection<RoleSubTabModel> RoleSubTabs { get; } = [];
 
     public IReadOnlyList<string> AvailablePriorities { get; } = WorkTaskPriorities.All;
-    public IReadOnlyList<string> AvailableTimelineCategories { get; } = TimelineCategories.All;
 
     [ObservableProperty] private string _greetingText = "Xin chào";
     [ObservableProperty] private string _userRoleAndCompanyText = string.Empty;
@@ -85,12 +84,16 @@ public sealed partial class WelcomeDashboardViewModel : ObservableObject
     [ObservableProperty] private WorkTaskEntity? _selectedAssignedTask;
     [ObservableProperty] private string _quickHandoverNotes = string.Empty;
 
-    // Shared Timeline Schedule
-    [ObservableProperty] private string _newPlanTitle = string.Empty;
-    [ObservableProperty] private string _newPlanDescription = string.Empty;
-    [ObservableProperty] private string _newPlanCategory = TimelineCategories.Plan;
-    [ObservableProperty] private DateTime? _newPlanStartDate = DateTime.Today;
-    [ObservableProperty] private DateTime? _newPlanEndDate = DateTime.Today.AddDays(3);
+    // Parallel Horizontal Timeline state
+    private DateOnly _timelineAnchorDate = DateOnly.FromDateTime(DateTime.Today);
+    private TimelineZoomMode _timelineZoomMode = TimelineZoomMode.Normal30Days;
+    private int _timelineTrackCount = TimelineTrackLayoutEngine.DefaultTrackCount;
+    private double _timelineViewportWidth = 820.0;
+
+    [ObservableProperty] private TimelineLayoutResult? _timelineLayout;
+    [ObservableProperty] private string _timelineZoomLabel = "Mặc định 30 ngày";
+    [ObservableProperty] private string _timelineTrackToggleLabel = "Mở rộng (5 đường)";
+    [ObservableProperty] private string _timelineSummaryText = string.Empty;
 
     // Progress counters
     [ObservableProperty] private int _totalTrackedCount;
@@ -104,6 +107,7 @@ public sealed partial class WelcomeDashboardViewModel : ObservableObject
 
     public event EventHandler? RefreshRequested;
     public event EventHandler<string>? NavigateRequested;
+    public event EventHandler<TimelinePlanEntity?>? OpenTimelineEditorRequested;
 
     [RelayCommand]
     public async Task RefreshAsync()
@@ -157,6 +161,7 @@ public sealed partial class WelcomeDashboardViewModel : ObservableObject
         {
             TimelinePlans.Add(p);
         }
+        RebuildTimelineLayout();
 
         TotalTrackedCount = progress.TotalTrackedTasks;
         CompletedCount = progress.CompletedCount;
@@ -249,53 +254,118 @@ public sealed partial class WelcomeDashboardViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private async Task AddTimelinePlanAsync()
+    public void UpdateTimelineViewportWidth(double width)
     {
-        if (string.IsNullOrWhiteSpace(NewPlanTitle))
+        if (width > 200 && Math.Abs(width - _timelineViewportWidth) > 24)
         {
-            StatusBanner = "Vui lòng nhập tiêu đề kế hoạch / lịch trình.";
-            return;
+            _timelineViewportWidth = width;
+            RebuildTimelineLayout();
         }
+    }
 
-        DateTime startLocal = NewPlanStartDate ?? DateTime.Today;
-        DateTime endLocal = NewPlanEndDate ?? startLocal;
-        DateTimeOffset startUtc = new DateTimeOffset(startLocal.Date, DateTimeOffset.Now.Offset).ToUniversalTime();
-        DateTimeOffset endUtc = new DateTimeOffset(endLocal.Date.AddHours(17).AddMinutes(30), DateTimeOffset.Now.Offset).ToUniversalTime();
+    private void RebuildTimelineLayout()
+    {
+        TimelineLayoutResult layout = TimelineTrackLayoutEngine.BuildLayout(
+            TimelinePlans.ToArray(),
+            _timelineAnchorDate,
+            _timelineZoomMode,
+            _timelineTrackCount,
+            _timelineViewportWidth);
 
-        await _timelineService.AddOrUpdatePlanAsync(
-            null,
-            NewPlanTitle,
-            NewPlanDescription,
-            NewPlanCategory,
-            startUtc,
-            endUtc);
+        TimelineLayout = layout;
+        TimelineZoomLabel = _timelineZoomMode switch
+        {
+            TimelineZoomMode.Overview60Days => "Toàn cảnh 60 ngày",
+            TimelineZoomMode.Detailed14Days => "Chi tiết 14 ngày",
+            _ => "Mặc định 30 ngày"
+        };
+        TimelineTrackToggleLabel = _timelineTrackCount > TimelineTrackLayoutEngine.DefaultTrackCount
+            ? $"Thu gọn ({TimelineTrackLayoutEngine.DefaultTrackCount} đường)"
+            : $"Mở rộng ({TimelineTrackLayoutEngine.ExpandedTrackCount} đường)";
 
-        NewPlanTitle = string.Empty;
-        NewPlanDescription = string.Empty;
-        (_, int synced, _) = await _collabSync.SyncCollaborationOnceAsync();
-        StatusBanner = synced >= 0
-            ? "Đã bổ sung kế hoạch vào Lịch trình chung và đồng bộ LAN."
-            : "Đã lưu kế hoạch vào Lịch trình chung.";
-        await RefreshAsync();
+        string overflowNote = layout.OverflowPlanCount > 0
+            ? $" • ⚠ {layout.OverflowPlanCount} kế hoạch trùng ngày chưa hiển thị (bấm Mở rộng 5 đường)"
+            : string.Empty;
+        TimelineSummaryText = $"Khoảng {layout.RangeStart:dd/MM/yyyy} → {layout.RangeEnd:dd/MM/yyyy} • Hiển thị {_timelineTrackCount} đường song song • {TimelinePlans.Count} kế hoạch{overflowNote} • Bấm trực tiếp lên thanh kế hoạch để xem/sửa.";
     }
 
     [RelayCommand]
-    private async Task CycleTimelinePlanStatusAsync(TimelinePlanEntity? plan)
+    private void OpenTimelineEditor(TimelinePlanEntity? plan = null) =>
+        OpenTimelineEditorRequested?.Invoke(this, plan);
+
+    [RelayCommand]
+    private void ZoomInTimeline()
     {
-        if (plan is null) return;
-        await _timelineService.CycleStatusAsync(plan.Id);
-        _ = await _collabSync.SyncCollaborationOnceAsync();
-        await RefreshAsync();
+        _timelineZoomMode = _timelineZoomMode switch
+        {
+            TimelineZoomMode.Overview60Days => TimelineZoomMode.Normal30Days,
+            TimelineZoomMode.Normal30Days => TimelineZoomMode.Detailed14Days,
+            _ => TimelineZoomMode.Detailed14Days
+        };
+        RebuildTimelineLayout();
     }
 
     [RelayCommand]
-    private async Task DeleteTimelinePlanAsync(TimelinePlanEntity? plan)
+    private void ZoomOutTimeline()
     {
-        if (plan is null) return;
-        await _timelineService.DeletePlanAsync(plan.Id);
-        _ = await _collabSync.SyncCollaborationOnceAsync();
-        await RefreshAsync();
+        _timelineZoomMode = _timelineZoomMode switch
+        {
+            TimelineZoomMode.Detailed14Days => TimelineZoomMode.Normal30Days,
+            TimelineZoomMode.Normal30Days => TimelineZoomMode.Overview60Days,
+            _ => TimelineZoomMode.Overview60Days
+        };
+        RebuildTimelineLayout();
+    }
+
+    [RelayCommand]
+    private void ResetTimelineZoom()
+    {
+        _timelineZoomMode = TimelineZoomMode.Normal30Days;
+        _timelineAnchorDate = DateOnly.FromDateTime(DateTime.Today);
+        _timelineTrackCount = TimelineTrackLayoutEngine.DefaultTrackCount;
+        RebuildTimelineLayout();
+    }
+
+    [RelayCommand]
+    private void ToggleTimelineTracks()
+    {
+        _timelineTrackCount = _timelineTrackCount <= TimelineTrackLayoutEngine.DefaultTrackCount
+            ? TimelineTrackLayoutEngine.ExpandedTrackCount
+            : TimelineTrackLayoutEngine.DefaultTrackCount;
+        RebuildTimelineLayout();
+    }
+
+    [RelayCommand]
+    private void ShiftTimelineBackward()
+    {
+        int step = _timelineZoomMode switch
+        {
+            TimelineZoomMode.Detailed14Days => 7,
+            TimelineZoomMode.Overview60Days => 20,
+            _ => 10
+        };
+        _timelineAnchorDate = _timelineAnchorDate.AddDays(-step);
+        RebuildTimelineLayout();
+    }
+
+    [RelayCommand]
+    private void ShiftTimelineForward()
+    {
+        int step = _timelineZoomMode switch
+        {
+            TimelineZoomMode.Detailed14Days => 7,
+            TimelineZoomMode.Overview60Days => 20,
+            _ => 10
+        };
+        _timelineAnchorDate = _timelineAnchorDate.AddDays(step);
+        RebuildTimelineLayout();
+    }
+
+    [RelayCommand]
+    private void JumpTimelineToday()
+    {
+        _timelineAnchorDate = DateOnly.FromDateTime(DateTime.Today);
+        RebuildTimelineLayout();
     }
 
     [RelayCommand]

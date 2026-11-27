@@ -22,6 +22,7 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
     private readonly CompanyBrandingService _branding;
     private readonly ILogger<WorkspaceWindowViewModel> _logger;
     private readonly ChatNotificationPopupService? _chatPopupService;
+    private readonly ChatDockCoordinator? _chatDockCoordinator;
 
     private string? _pendingActionNavKey;
 
@@ -35,7 +36,8 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         ThemeService theme,
         CompanyBrandingService branding,
         ILogger<WorkspaceWindowViewModel> logger,
-        ChatNotificationPopupService? chatPopupService = null)
+        ChatNotificationPopupService? chatPopupService = null,
+        ChatDockCoordinator? chatDockCoordinator = null)
     {
         _session = session;
         _permissions = permissions;
@@ -47,6 +49,46 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         _branding = branding;
         _logger = logger;
         _chatPopupService = chatPopupService;
+        _chatDockCoordinator = chatDockCoordinator;
+
+        if (_chatDockCoordinator is not null)
+        {
+            _chatDockCoordinator.DetachedStateChanged += (_, detached) =>
+            {
+                if (SelectedNavItem?.Key == "core.chat")
+                {
+                    IsChatDetachedPlaceholderVisible = detached;
+                    if (detached)
+                    {
+                        ActiveView = null;
+                    }
+                }
+            };
+            _chatDockCoordinator.DockDropHighlightChanged += (_, highlight) =>
+            {
+                IsChatDockDropHighlightVisible = highlight;
+            };
+            _chatDockCoordinator.RedockedToMainRequested += (_, restoredChatView) =>
+            {
+                IsChatDetachedPlaceholderVisible = false;
+                IsChatDockDropHighlightVisible = false;
+                NavigationItemModel? chatNav = FindNavItemByKey("core.chat");
+                if (chatNav is not null)
+                {
+                    chatNav.BadgeCount = 0;
+                    IsSettingsSelected = false;
+                    if (SelectedNavItem == chatNav)
+                    {
+                        ActiveView = restoredChatView ?? _services.GetService(typeof(ChatWorkspaceView));
+                    }
+                    else
+                    {
+                        _reattachingChatView = restoredChatView;
+                        SelectedNavItem = chatNav;
+                    }
+                }
+            };
+        }
 
         _permissions.PolicyChanged += (_, _) => PolicyRefreshRequested?.Invoke(this, EventArgs.Empty);
         _eventBus.Subscribe<InternalNoticeEvent>(evt =>
@@ -104,6 +146,10 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
     [ObservableProperty] private string? _activeNoticeBanner;
     [ObservableProperty] private bool _hasNoticeAction;
     [ObservableProperty] private bool _isSettingsSelected;
+    [ObservableProperty] private bool _isChatDetachedPlaceholderVisible;
+    [ObservableProperty] private bool _isChatDockDropHighlightVisible;
+
+    private ChatWorkspaceView? _reattachingChatView;
 
     public event EventHandler? PolicyRefreshRequested;
     public event EventHandler? LogoutRequested;
@@ -386,6 +432,25 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         if (string.Equals(value.Key, "core.chat", StringComparison.OrdinalIgnoreCase))
         {
             value.BadgeCount = 0;
+            if (_chatDockCoordinator?.IsChatDetached == true)
+            {
+                IsChatDetachedPlaceholderVisible = true;
+                ActiveView = null;
+                return;
+            }
+
+            IsChatDetachedPlaceholderVisible = false;
+            if (_reattachingChatView is not null)
+            {
+                ChatWorkspaceView view = _reattachingChatView;
+                _reattachingChatView = null;
+                ActiveView = view;
+                return;
+            }
+        }
+        else
+        {
+            IsChatDetachedPlaceholderVisible = false;
         }
 
         if (value.Key.StartsWith("core.hr.", StringComparison.OrdinalIgnoreCase) && ActiveView is HrAttendanceView existingHrView)
@@ -404,8 +469,12 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
     {
         SelectedNavItem = null;
         IsSettingsSelected = true;
+        IsChatDetachedPlaceholderVisible = false;
         ActiveView = _services.GetService(typeof(AccountAndAppearanceView))!;
     }
+
+    [RelayCommand]
+    private void RedockChatToMain() => _chatDockCoordinator?.RedockToMain();
 
     [RelayCommand]
     private void OpenNoticeTarget()
@@ -445,6 +514,7 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
     [RelayCommand]
     private void Logout()
     {
+        _chatDockCoordinator?.CloseDetachedWindowOnShutdown();
         _chatPopupService?.CloseAllPopups();
         _session.ClearAuthentication();
         LogoutRequested?.Invoke(this, EventArgs.Empty);

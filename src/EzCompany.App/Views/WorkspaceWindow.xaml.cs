@@ -12,6 +12,7 @@ public partial class WorkspaceWindow : EzFluentWindow
     private readonly IServiceProvider _services;
     private readonly IWorkspaceWindowAccessor _windowAccessor;
     private readonly ChatNotificationPopupService _chatPopupService;
+    private readonly ChatDockCoordinator _chatDockCoordinator;
     private EventHandler<Guid>? _popupOpenHandler;
 
     public WorkspaceWindow(
@@ -19,11 +20,13 @@ public partial class WorkspaceWindow : EzFluentWindow
         IServiceProvider services,
         IWorkspaceWindowAccessor windowAccessor,
         AppearanceSettingsService appearance,
-        ChatNotificationPopupService chatPopupService)
+        ChatNotificationPopupService chatPopupService,
+        ChatDockCoordinator chatDockCoordinator)
     {
         _services = services;
         _windowAccessor = windowAccessor;
         _chatPopupService = chatPopupService;
+        _chatDockCoordinator = chatDockCoordinator;
         DataContext = viewModel;
         InitializeComponent();
         appearance.ApplyToWindow(this);
@@ -81,6 +84,7 @@ public partial class WorkspaceWindow : EzFluentWindow
             {
                 _chatPopupService.OpenChatConversationRequested -= _popupOpenHandler;
             }
+            _chatDockCoordinator.CloseDetachedWindowOnShutdown();
             _chatPopupService.CloseAllPopups();
             _windowAccessor.UnregisterWindow(this);
         };
