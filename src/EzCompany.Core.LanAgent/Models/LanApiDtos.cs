@@ -140,7 +140,9 @@ public sealed record TaskSyncPayloadDto(
     string SenderSignedPolicyJson,
     string? AssignmentFileName = null,
     string? AssignmentFileSha256 = null,
-    string? AssignmentFileBase64 = null);
+    string? AssignmentFileBase64 = null,
+    string SubtasksJson = "[]",
+    string RecurrenceRule = "None");
 
 public sealed record TaskSyncAckDto(bool Accepted, string Message);
 
@@ -170,7 +172,9 @@ public sealed record ChatSyncEnvelopeDto(
     Guid? LinkedTaskId,
     DateTimeOffset SentAtUtc,
     string SenderSignedPolicyJson,
-    string MessageType = "Text");
+    string MessageType = "Text",
+    Guid? ReplyToMessageId = null,
+    string? ReplyPreviewText = null);
 
 public sealed record ChatHistoryPullResponseDto(IReadOnlyList<ChatSyncEnvelopeDto> Messages);
 
@@ -210,7 +214,82 @@ public sealed record AttendanceSyncDto(
     string SenderSignedPolicyJson,
     double OvertimeHours = 0.0,
     double WorkDayUnits = 1.0,
-    bool IsManualEntry = false);
+    bool IsManualEntry = false,
+    bool IsDeleted = false);
+
+public sealed record UserAvatarDto(
+    string MachineId,
+    string? AvatarBase64,
+    DateTimeOffset? UpdatedAtUtc);
+
+public sealed record AvatarSyncRequestDto(
+    IReadOnlyList<UserAvatarDto> Avatars,
+    string SenderSignedPolicyJson);
+
+public sealed record LeaveRequestDto(
+    Guid Id,
+    Guid CompanyId,
+    Guid EmployeeProfileId,
+    string EmployeeCode,
+    string EmployeeName,
+    string MachineId,
+    string RequestType,
+    string StartDateKey,
+    string EndDateKey,
+    double OvertimeHours,
+    string Reason,
+    string Status,
+    string ReviewedByName,
+    DateTimeOffset? ReviewedAtUtc,
+    string ReviewNotes,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record LeaveRequestSyncBatchDto(
+    IReadOnlyList<LeaveRequestDto> Items,
+    string SenderSignedPolicyJson);
+
+public sealed record ExpenseRequestDto(
+    Guid Id,
+    Guid CompanyId,
+    string RequesterMachineId,
+    string RequesterUsername,
+    string RequesterFullName,
+    string RequestType,
+    string Category,
+    decimal AmountVnd,
+    string Description,
+    string? ReceiptFileName,
+    string? ReceiptVaultPath,
+    string Status,
+    string ApprovedByName,
+    DateTimeOffset? ApprovedAtUtc,
+    string ReviewNotes,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record ExpenseRequestSyncBatchDto(
+    IReadOnlyList<ExpenseRequestDto> Items,
+    string SenderSignedPolicyJson);
+
+public sealed record SharedDocumentDto(
+    Guid Id,
+    Guid CompanyId,
+    string Title,
+    string Category,
+    string Description,
+    string FileName,
+    string FileSha256,
+    long FileSizeBytes,
+    string UploadedByMachineId,
+    string UploadedByName,
+    DateTimeOffset UploadedAtUtc,
+    bool IsDeleted,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record SharedDocumentSyncBatchDto(
+    IReadOnlyList<SharedDocumentDto> Items,
+    string SenderSignedPolicyJson);
 
 public sealed record AccountResetInitiateRequestDto(
     string MachineId,

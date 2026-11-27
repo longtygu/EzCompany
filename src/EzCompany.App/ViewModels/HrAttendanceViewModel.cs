@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EzCompany.App.Services;
@@ -80,24 +81,43 @@ public sealed partial class EditablePayrollRow : ObservableObject
 public sealed partial class HrAttendanceViewModel : ObservableObject
 {
     private readonly HrAttendanceService _hrService;
+    private readonly LeaveRequestService _leaveService;
     private readonly AttendanceExcelExporter _excelExporter;
+    private readonly PayslipPdfExporter _payslipExporter;
+    private readonly ChatService _chatService;
     private readonly LanCollaborationClient _collabClient;
+    private readonly PeerCollabSyncService _collabSync;
+    private readonly ILocalStoragePaths _paths;
     private readonly ISessionContext _session;
+    private readonly IEventBus _eventBus;
     private readonly Dictionary<Guid, decimal> _bonusCache = [];
 
     public HrAttendanceViewModel(
         HrAttendanceService hrService,
+        LeaveRequestService leaveService,
         AttendanceExcelExporter excelExporter,
+        PayslipPdfExporter payslipExporter,
+        ChatService chatService,
         LanCollaborationClient collabClient,
-        ISessionContext session)
+        PeerCollabSyncService collabSync,
+        ILocalStoragePaths paths,
+        ISessionContext session,
+        IEventBus eventBus)
     {
         _hrService = hrService;
+        _leaveService = leaveService;
         _excelExporter = excelExporter;
+        _payslipExporter = payslipExporter;
+        _chatService = chatService;
         _collabClient = collabClient;
+        _collabSync = collabSync;
+        _paths = paths;
         _session = session;
+        _eventBus = eventBus;
 
         SelectedMonth = DateTime.Now.Month;
         SelectedYear = DateTime.Now.Year;
+        _eventBus.Subscribe<LeaveRequestUpdatedEvent>(_ => LeaveRequestsRefreshRequested?.Invoke(this, EventArgs.Empty));
     }
 
     public ObservableCollection<EmployeeProfileEntity> Employees { get; } = [];
@@ -105,6 +125,7 @@ public sealed partial class HrAttendanceViewModel : ObservableObject
     public ObservableCollection<AttendanceRecordEntity> DailyRecords { get; } = [];
     public ObservableCollection<MonthlyAttendanceSummaryRow> MonthlySummary { get; } = [];
     public ObservableCollection<EditablePayrollRow> PayrollRows { get; } = [];
+    public ObservableCollection<LeaveRequestEntity> LeaveRequests { get; } = [];
 
     public IReadOnlyList<int> AvailableMonths { get; } = Enumerable.Range(1, 12).ToArray();
     public IReadOnlyList<string> EmploymentStatuses { get; } = ["Active", "OnLeave", "Inactive"];
@@ -146,16 +167,26 @@ public sealed partial class HrAttendanceViewModel : ObservableObject
     [ObservableProperty] private double _attendanceWorkDayUnits = 1.0;
     [ObservableProperty] private double _attendanceOvertimeHours;
     [ObservableProperty] private string _attendanceNotes = string.Empty;
+    [ObservableProperty] private string _attendanceFormModeText = string.Empty;
+    [ObservableProperty] private string _saveAttendanceButtonText = "Lưu chấm công tùy chỉnh";
+    private bool _suppressFormAutoLoad;
 
-    // Month / status / payroll summary
+    // Month / status / payroll summary / leave approvals
     [ObservableProperty] private int _selectedMonth;
     [ObservableProperty] private int _selectedYear;
     [ObservableProperty] private string _todayCheckStatus = "Hôm nay bạn chưa chấm công.";
     [ObservableProperty] private string _payrollSummaryText = string.Empty;
+    [ObservableProperty] private EditablePayrollRow? _selectedPayrollRow;
+    [ObservableProperty] private LeaveRequestEntity? _selectedLeaveRequest;
+    [ObservableProperty] private string _leaveReviewNotes = string.Empty;
+    [ObservableProperty] private bool _showPendingLeaveOnly = true;
     [ObservableProperty] private string _statusBanner = string.Empty;
 
     public Func<string, string, bool>? ConfirmDeleteCallback { get; set; }
     public event EventHandler<(int Year, int Month)>? OpenFullAttendanceWindowRequested;
+    public event EventHandler? LeaveRequestsRefreshRequested;
+
+    partial void OnShowPendingLeaveOnlyChanged(bool value) => _ = RefreshLeaveRequestsAsync();
 
     [RelayCommand]
     public async Task RefreshAllAsync()
@@ -169,9 +200,17 @@ public sealed partial class HrAttendanceViewModel : ObservableObject
             Employees.Add(e);
         }
 
-        AttendanceTargetEmployee = Employees.FirstOrDefault(e => e.Id == prevTargetId)
-                                ?? Employees.FirstOrDefault(e => string.Equals(e.LinkedMachineId, _session.MachineId, StringComparison.OrdinalIgnoreCase))
-                                ?? Employees.FirstOrDefault();
+        _suppressFormAutoLoad = true;
+        try
+        {
+            AttendanceTargetEmployee = Employees.FirstOrDefault(e => e.Id == prevTargetId)
+                                    ?? Employees.FirstOrDefault(e => string.Equals(e.LinkedMachineId, _session.MachineId, StringComparison.OrdinalIgnoreCase))
+                                    ?? Employees.FirstOrDefault();
+        }
+        finally
+        {
+            _suppressFormAutoLoad = false;
+        }
 
         RebuildFilteredEmployeeCards();
 
@@ -196,12 +235,29 @@ public sealed partial class HrAttendanceViewModel : ObservableObject
             ? "Hôm nay bạn chưa chấm công."
             : $"Hôm nay ({myToday.Status}): Vào {myToday.CheckInUtc?.ToLocalTime():HH:mm} • Ra {myToday.CheckOutUtc?.ToLocalTime().ToString("HH:mm") ?? "Chưa check-out"} • {myToday.WorkedHours:F2}h";
 
+        await LoadAttendanceFormForSelectedDayAsync();
         await RecalculatePayrollAsync();
+        await RefreshLeaveRequestsAsync();
     }
 
     partial void OnEmployeeSearchQueryChanged(string value) => RebuildFilteredEmployeeCards();
     partial void OnSelectedMonthChanged(int value) => _ = RefreshAllAsync();
     partial void OnSelectedYearChanged(int value) => _ = RefreshAllAsync();
+    partial void OnAttendanceTargetEmployeeChanged(EmployeeProfileEntity? value)
+    {
+        if (!_suppressFormAutoLoad)
+        {
+            _ = LoadAttendanceFormForSelectedDayAsync();
+        }
+    }
+
+    partial void OnAttendanceWorkDateChanged(DateTime value)
+    {
+        if (!_suppressFormAutoLoad)
+        {
+            _ = LoadAttendanceFormForSelectedDayAsync();
+        }
+    }
 
     partial void OnAttendanceStatusChanged(string value)
     {
@@ -410,6 +466,78 @@ public sealed partial class HrAttendanceViewModel : ObservableObject
     [RelayCommand]
     private void FillCurrentTimeCheckOut() => AttendanceCheckOutText = DateTime.Now.ToString("HH:mm");
 
+    public async Task LoadAttendanceFormForSelectedDayAsync()
+    {
+        if (AttendanceTargetEmployee is null)
+        {
+            AttendanceFormModeText = string.Empty;
+            SaveAttendanceButtonText = "Lưu chấm công tùy chỉnh";
+            return;
+        }
+
+        DateOnly workDate = DateOnly.FromDateTime(AttendanceWorkDate);
+        AttendanceRecordEntity? existing = await _hrService.GetAttendanceRecordForDayAsync(AttendanceTargetEmployee.Id, workDate);
+        if (existing is not null)
+        {
+            AttendanceCheckInText = existing.CheckInUtc?.ToLocalTime().ToString("HH:mm") ?? string.Empty;
+            AttendanceCheckOutText = existing.CheckOutUtc?.ToLocalTime().ToString("HH:mm") ?? string.Empty;
+            AttendanceStatus = existing.Status;
+            AttendanceWorkDayUnits = existing.WorkDayUnits;
+            AttendanceOvertimeHours = existing.OvertimeHours;
+            AttendanceNotes = existing.Notes;
+
+            string inTxt = string.IsNullOrEmpty(AttendanceCheckInText) ? "—" : AttendanceCheckInText;
+            string outTxt = string.IsNullOrEmpty(AttendanceCheckOutText) ? "—" : AttendanceCheckOutText;
+            string src = existing.IsManualEntry ? "Thủ công HR" : "App Check-in";
+            AttendanceFormModeText = $"✏ Ngày {workDate:dd/MM/yyyy} đã có chấm công (Vào {inTxt} • Ra {outTxt} • Nguồn {src}) — sửa rồi bấm Cập nhật";
+            SaveAttendanceButtonText = "Cập nhật chấm công ngày này";
+        }
+        else
+        {
+            AttendanceCheckInText = "08:00";
+            AttendanceCheckOutText = "17:30";
+            AttendanceStatus = "Present";
+            AttendanceWorkDayUnits = 1.0;
+            AttendanceOvertimeHours = 0;
+            AttendanceNotes = string.Empty;
+            AttendanceFormModeText = $"➕ Ngày {workDate:dd/MM/yyyy} chưa chấm công — tạo mới";
+            SaveAttendanceButtonText = "Lưu chấm công tùy chỉnh";
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteAttendanceForSelectedDayAsync()
+    {
+        if (AttendanceTargetEmployee is null)
+        {
+            StatusBanner = "Chưa chọn nhân viên.";
+            return;
+        }
+
+        DateOnly workDate = DateOnly.FromDateTime(AttendanceWorkDate);
+        AttendanceRecordEntity? existing = await _hrService.GetAttendanceRecordForDayAsync(AttendanceTargetEmployee.Id, workDate);
+        if (existing is null)
+        {
+            StatusBanner = $"Ngày {workDate:dd/MM/yyyy} của {AttendanceTargetEmployee.FullName} chưa có dữ liệu chấm công để xóa.";
+            return;
+        }
+
+        if (ConfirmDeleteCallback is not null &&
+            !ConfirmDeleteCallback($"Xóa chấm công ngày {workDate:dd/MM/yyyy} của {AttendanceTargetEmployee.FullName}?", "Xác nhận xóa chấm công"))
+        {
+            return;
+        }
+
+        AttendanceRecordEntity? deleted = await _hrService.DeleteAttendanceRecordAsync(existing.Id);
+        if (deleted is not null && !_session.IsDirectorNode)
+        {
+            _ = await _collabClient.PushAttendanceToDirectorsAsync(deleted);
+        }
+
+        StatusBanner = $"Đã xóa chấm công ngày {workDate:dd/MM/yyyy} của {AttendanceTargetEmployee.FullName}.";
+        await RefreshAllAsync();
+    }
+
     [RelayCommand]
     private async Task SaveCustomAttendanceAsync()
     {
@@ -558,6 +686,112 @@ public sealed partial class HrAttendanceViewModel : ObservableObject
 
             StatusBanner = $"Đã xuất Bảng lương Excel: {dialog.FileName}";
         }
+    }
+
+    [RelayCommand]
+    private void ExportSelectedPayslipPdf()
+    {
+        if (SelectedPayrollRow is null)
+        {
+            StatusBanner = "Vui lòng chọn một nhân viên trong Bảng lương để xuất Phiếu lương PDF.";
+            return;
+        }
+
+        MonthlyPayrollRow record = SelectedPayrollRow.ToRecord();
+        var dialog = new SaveFileDialog
+        {
+            Title = $"Xuất Phiếu lương PDF — {record.EmployeeName}",
+            Filter = "PDF Document (*.pdf)|*.pdf",
+            FileName = $"PhieuLuong_{record.EmployeeCode}_{SelectedYear}_{SelectedMonth:D2}.pdf"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            _payslipExporter.ExportEmployeePayslip(
+                dialog.FileName,
+                SelectedYear,
+                SelectedMonth,
+                _session.CompanyName,
+                record);
+
+            StatusBanner = $"Đã xuất Phiếu lương PDF cho {record.EmployeeName}: {dialog.FileName}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task SendSelectedPayslipToChatAsync()
+    {
+        if (SelectedPayrollRow is null)
+        {
+            StatusBanner = "Vui lòng chọn một nhân viên trong Bảng lương để gửi Phiếu lương qua Chat.";
+            return;
+        }
+
+        MonthlyPayrollRow record = SelectedPayrollRow.ToRecord();
+        EmployeeProfileEntity? profile = Employees.FirstOrDefault(e => e.Id == record.EmployeeProfileId);
+        string? machineId = profile?.LinkedMachineId;
+        if (string.IsNullOrWhiteSpace(machineId))
+        {
+            StatusBanner = $"Nhân viên {record.EmployeeName} chưa được liên kết tài khoản/máy LAN để gửi Chat.";
+            return;
+        }
+
+        if (string.Equals(machineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+        {
+            StatusBanner = $"Tài khoản của {record.EmployeeName} đang dùng chung máy này — hãy dùng 'Xuất Phiếu lương (.pdf)'.";
+            return;
+        }
+
+        string payrollDir = Path.Combine(_paths.VaultDirectory, "Payroll");
+        Directory.CreateDirectory(payrollDir);
+        string pdfPath = Path.Combine(payrollDir, $"PhieuLuong_{record.EmployeeCode}_{SelectedYear}_{SelectedMonth:D2}.pdf");
+        _payslipExporter.ExportEmployeePayslip(pdfPath, SelectedYear, SelectedMonth, _session.CompanyName, record);
+
+        ChatConversationEntity conv = await _chatService.GetOrCreateDirectConversationAsync(machineId, record.EmployeeName);
+        _ = await _chatService.SendMessageAsync(
+            conv.Id,
+            $"📄 Phiếu lương tháng {SelectedMonth:D2}/{SelectedYear} — Thực lĩnh: {record.NetSalaryVnd:N0} VNĐ",
+            pdfPath,
+            null,
+            [machineId]);
+
+        _ = await _collabSync.FlushPendingChatAsync();
+        StatusBanner = $"Đã gửi Phiếu lương PDF tháng {SelectedMonth:D2}/{SelectedYear} vào Chat riêng của {record.EmployeeName}.";
+    }
+
+    [RelayCommand]
+    public async Task RefreshLeaveRequestsAsync()
+    {
+        IReadOnlyList<LeaveRequestEntity> list = await _leaveService.GetRequestsAsync(pendingOnly: ShowPendingLeaveOnly, mineOnly: false);
+        Guid? prevId = SelectedLeaveRequest?.Id;
+        LeaveRequests.Clear();
+        foreach (LeaveRequestEntity req in list)
+        {
+            LeaveRequests.Add(req);
+        }
+
+        SelectedLeaveRequest = LeaveRequests.FirstOrDefault(r => r.Id == prevId) ?? LeaveRequests.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private async Task ApproveLeaveRequestAsync() => await DecideSelectedLeaveAsync(true);
+
+    [RelayCommand]
+    private async Task RejectLeaveRequestAsync() => await DecideSelectedLeaveAsync(false);
+
+    private async Task DecideSelectedLeaveAsync(bool approve)
+    {
+        if (SelectedLeaveRequest is null)
+        {
+            StatusBanner = "Vui lòng chọn một đơn xin phép / tăng ca.";
+            return;
+        }
+
+        LeaveRequestEntity decided = await _leaveService.DecideRequestAsync(SelectedLeaveRequest.Id, approve, LeaveReviewNotes);
+        LeaveReviewNotes = string.Empty;
+        _ = await _collabClient.SyncAllEnterpriseEntitiesWithOnlinePeersAsync();
+        StatusBanner = $"Đã {(approve ? "DUYỆT (tự ghi vào chấm công)" : "TỪ CHỐI")} đơn {decided.RequestType} của {decided.EmployeeName}.";
+        await RefreshAllAsync();
     }
 
     public static bool TryParseOptionalHourMinute(string? raw, out TimeSpan? result)

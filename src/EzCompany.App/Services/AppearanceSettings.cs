@@ -13,6 +13,8 @@ public sealed class AppearanceSettings
     public string BackdropType { get; set; } = "None";
     public double CardOpacity { get; set; } = 1.0;
     public double CardTintStrength { get; set; } = 0.08;
+    public bool MinimizeToTrayOnClose { get; set; } = true;
+    public bool StartWithWindows { get; set; } = false;
 
     public AppearanceSettings Clone() => new()
     {
@@ -26,6 +28,8 @@ public sealed class AppearanceSettings
         WindowOpacity = WindowOpacity,
         BackdropType = BackdropType,
         CardOpacity = CardOpacity,
-        CardTintStrength = CardTintStrength
+        CardTintStrength = CardTintStrength,
+        MinimizeToTrayOnClose = MinimizeToTrayOnClose,
+        StartWithWindows = StartWithWindows
     };
 }

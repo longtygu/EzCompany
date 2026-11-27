@@ -243,6 +243,7 @@ public sealed class DirectorSignatureAuthMiddleware
         path.StartsWith("/api/v1/chat/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("/api/v1/timeline/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("/api/v1/hr/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/api/v1/collab/", StringComparison.OrdinalIgnoreCase) ||
         (path.Equals("/api/v1/company/branding", StringComparison.OrdinalIgnoreCase) &&
          HttpMethods.IsGet(method));
 

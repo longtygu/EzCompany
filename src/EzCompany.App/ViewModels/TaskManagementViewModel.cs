@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EzCompany.App.Services;
 using EzCompany.Core.Abstractions;
 using EzCompany.Core.Data;
 using EzCompany.Core.Data.Entities;
@@ -11,6 +12,16 @@ using EzCompany.Core.LanAgent.Tasks;
 using Microsoft.Win32;
 
 namespace EzCompany.App.ViewModels;
+
+public sealed partial class SelectableSubtaskItem : ObservableObject
+{
+    public required Guid Id { get; init; }
+    public required string Title { get; init; }
+    [ObservableProperty] private bool _isDone;
+    public Action? ChangedCallback { get; init; }
+
+    partial void OnIsDoneChanged(bool value) => ChangedCallback?.Invoke();
+}
 
 public sealed partial class TaskManagementViewModel : ObservableObject
 {
@@ -37,18 +48,33 @@ public sealed partial class TaskManagementViewModel : ObservableObject
     }
 
     public ObservableCollection<PeerDirectoryEntryDto> Peers { get; } = [];
+    public ObservableCollection<SelectablePeerMember> SelectableAssignees { get; } = [];
     public ObservableCollection<WorkTaskEntity> AssignedToMeTasks { get; } = [];
     public ObservableCollection<WorkTaskEntity> AssignedByMeTasks { get; } = [];
+    public ObservableCollection<WorkTaskEntity> FilteredInboxTasks { get; } = [];
+    public ObservableCollection<WorkTaskEntity> FilteredOutboxTasks { get; } = [];
     public ObservableCollection<WorkTaskHistoryEntity> TaskHistories { get; } = [];
+    public ObservableCollection<SelectableSubtaskItem> InboxSubtasks { get; } = [];
 
     public IReadOnlyList<string> AvailablePriorities { get; } = WorkTaskPriorities.All;
+    public IReadOnlyList<string> AvailableRecurrences { get; } = WorkTaskRecurrenceRules.All;
+    public IReadOnlyList<string> StatusFilterOptions { get; } = ["ALL", WorkTaskStatuses.Pending, WorkTaskStatuses.InProgress, WorkTaskStatuses.HandedOver, WorkTaskStatuses.Completed, WorkTaskStatuses.RevisionRequested];
+    public IReadOnlyList<string> PriorityFilterOptions { get; } = ["ALL", .. WorkTaskPriorities.All];
 
     [ObservableProperty] private PeerDirectoryEntryDto? _selectedPeer;
+    [ObservableProperty] private bool _assignToMultiplePeers;
     [ObservableProperty] private string _newTaskTitle = string.Empty;
     [ObservableProperty] private string _newTaskDescription = string.Empty;
     [ObservableProperty] private string _newTaskPriority = WorkTaskPriorities.Normal;
+    [ObservableProperty] private string _newTaskRecurrence = WorkTaskRecurrenceRules.None;
     [ObservableProperty] private DateTime? _newTaskDueDate = DateTime.Today.AddDays(1);
     [ObservableProperty] private string _newTaskAttachmentPath = string.Empty;
+
+    [ObservableProperty] private string _taskSearchQuery = string.Empty;
+    [ObservableProperty] private string _taskStatusFilter = "ALL";
+    [ObservableProperty] private string _taskPriorityFilter = "ALL";
+    [ObservableProperty] private string _newSubtaskTitle = string.Empty;
+    private bool _suppressSubtaskSave;
 
     [ObservableProperty] private WorkTaskEntity? _selectedInboxTask;
     [ObservableProperty] private string _handoverNotes = string.Empty;
@@ -62,6 +88,131 @@ public sealed partial class TaskManagementViewModel : ObservableObject
 
     public event EventHandler? RefreshRequested;
 
+    partial void OnTaskSearchQueryChanged(string value) => RebuildFilteredLists();
+    partial void OnTaskStatusFilterChanged(string value) => RebuildFilteredLists();
+    partial void OnTaskPriorityFilterChanged(string value) => RebuildFilteredLists();
+
+    partial void OnSelectedInboxTaskChanged(WorkTaskEntity? value)
+    {
+        ReloadInboxSubtasks();
+    }
+
+    private void ReloadInboxSubtasks()
+    {
+        _suppressSubtaskSave = true;
+        try
+        {
+            InboxSubtasks.Clear();
+            if (SelectedInboxTask is null)
+            {
+                return;
+            }
+
+            foreach (WorkTaskSubtaskItem sub in WorkTaskService.ParseSubtasks(SelectedInboxTask.SubtasksJson))
+            {
+                InboxSubtasks.Add(new SelectableSubtaskItem
+                {
+                    Id = sub.Id,
+                    Title = sub.Title,
+                    IsDone = sub.IsDone,
+                    ChangedCallback = () => _ = SaveInboxSubtasksAsync()
+                });
+            }
+        }
+        finally
+        {
+            _suppressSubtaskSave = false;
+        }
+    }
+
+    private async Task SaveInboxSubtasksAsync()
+    {
+        if (_suppressSubtaskSave || SelectedInboxTask is null)
+        {
+            return;
+        }
+
+        WorkTaskSubtaskItem[] items = InboxSubtasks
+            .Select(s => new WorkTaskSubtaskItem(s.Id, s.Title, s.IsDone))
+            .ToArray();
+        WorkTaskEntity updated = await _taskService.UpdateSubtasksAsync(SelectedInboxTask.Id, items);
+        SelectedInboxTask.SubtasksJson = updated.SubtasksJson;
+        _ = await _peerTaskSync.FlushPendingTasksOnceAsync();
+    }
+
+    [RelayCommand]
+    private async Task AddSubtaskAsync()
+    {
+        if (SelectedInboxTask is null || string.IsNullOrWhiteSpace(NewSubtaskTitle))
+        {
+            return;
+        }
+
+        InboxSubtasks.Add(new SelectableSubtaskItem
+        {
+            Id = Guid.NewGuid(),
+            Title = NewSubtaskTitle.Trim(),
+            IsDone = false,
+            ChangedCallback = () => _ = SaveInboxSubtasksAsync()
+        });
+        NewSubtaskTitle = string.Empty;
+        await SaveInboxSubtasksAsync();
+    }
+
+    [RelayCommand]
+    private async Task DeleteSubtaskAsync(SelectableSubtaskItem? item)
+    {
+        if (item is null || SelectedInboxTask is null)
+        {
+            return;
+        }
+
+        InboxSubtasks.Remove(item);
+        await SaveInboxSubtasksAsync();
+    }
+
+    private void RebuildFilteredLists()
+    {
+        string q = ChatWorkspaceViewModel.NormalizeForSearch(TaskSearchQuery);
+
+        bool Matches(WorkTaskEntity t)
+        {
+            if (!string.IsNullOrEmpty(q) &&
+                !ChatWorkspaceViewModel.NormalizeForSearch(t.Title).Contains(q, StringComparison.Ordinal) &&
+                !ChatWorkspaceViewModel.NormalizeForSearch(t.AssignerFullName).Contains(q, StringComparison.Ordinal) &&
+                !ChatWorkspaceViewModel.NormalizeForSearch(t.AssigneeFullName).Contains(q, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (!string.Equals(TaskStatusFilter, "ALL", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(t.Status, TaskStatusFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!string.Equals(TaskPriorityFilter, "ALL", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(t.Priority, TaskPriorityFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        FilteredInboxTasks.Clear();
+        foreach (WorkTaskEntity t in AssignedToMeTasks.Where(Matches))
+        {
+            FilteredInboxTasks.Add(t);
+        }
+
+        FilteredOutboxTasks.Clear();
+        foreach (WorkTaskEntity t in AssignedByMeTasks.Where(Matches))
+        {
+            FilteredOutboxTasks.Add(t);
+        }
+    }
+
     [RelayCommand]
     public async Task RefreshAllAsync()
     {
@@ -70,10 +221,21 @@ public sealed partial class TaskManagementViewModel : ObservableObject
         {
             string? prevPeerMachine = SelectedPeer?.MachineId;
             IReadOnlyList<PeerDirectoryEntryDto> peers = await _taskClient.GetCompanyPeerDirectoryAsync();
+            var prevChecked = SelectableAssignees.Where(a => a.IsSelected).Select(a => a.MachineId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             Peers.Clear();
+            SelectableAssignees.Clear();
             foreach (PeerDirectoryEntryDto p in peers)
             {
                 Peers.Add(p);
+                SelectableAssignees.Add(new SelectablePeerMember
+                {
+                    MachineId = p.MachineId,
+                    FullName = p.FullName,
+                    RoleDisplay = CompanyRoles.FormatRolesBilingual(p.Role),
+                    IsOnline = p.IsOnline,
+                    IsSelected = prevChecked.Contains(p.MachineId)
+                });
             }
             SelectedPeer = Peers.FirstOrDefault(p => p.MachineId == prevPeerMachine)
                            ?? Peers.FirstOrDefault();
@@ -85,8 +247,6 @@ public sealed partial class TaskManagementViewModel : ObservableObject
             {
                 AssignedToMeTasks.Add(t);
             }
-            SelectedInboxTask = AssignedToMeTasks.FirstOrDefault(t => t.Id == prevInboxId)
-                                ?? AssignedToMeTasks.FirstOrDefault();
 
             Guid? prevOutboxId = SelectedOutboxTask?.Id;
             IReadOnlyList<WorkTaskEntity> outbox = await _taskService.GetAssignedByMeTasksAsync();
@@ -95,8 +255,13 @@ public sealed partial class TaskManagementViewModel : ObservableObject
             {
                 AssignedByMeTasks.Add(t);
             }
-            SelectedOutboxTask = AssignedByMeTasks.FirstOrDefault(t => t.Id == prevOutboxId)
-                                 ?? AssignedByMeTasks.FirstOrDefault();
+
+            RebuildFilteredLists();
+            SelectedInboxTask = FilteredInboxTasks.FirstOrDefault(t => t.Id == prevInboxId)
+                                ?? FilteredInboxTasks.FirstOrDefault();
+            SelectedOutboxTask = FilteredOutboxTasks.FirstOrDefault(t => t.Id == prevOutboxId)
+                                 ?? FilteredOutboxTasks.FirstOrDefault();
+            ReloadInboxSubtasks();
 
             IReadOnlyList<WorkTaskHistoryEntity> histories = await _taskService.GetTaskHistoriesAsync(null, 150);
             TaskHistories.Clear();
@@ -129,15 +294,26 @@ public sealed partial class TaskManagementViewModel : ObservableObject
     [RelayCommand]
     private async Task AssignTaskAsync()
     {
-        if (SelectedPeer is null)
-        {
-            StatusBanner = "Vui lòng chọn nhân sự nhận việc.";
-            return;
-        }
-
         if (string.IsNullOrWhiteSpace(NewTaskTitle))
         {
             StatusBanner = "Vui lòng nhập tiêu đề công việc.";
+            return;
+        }
+
+        List<PeerDirectoryEntryDto> targets = [];
+        if (AssignToMultiplePeers)
+        {
+            var selectedIds = SelectableAssignees.Where(s => s.IsSelected).Select(s => s.MachineId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            targets.AddRange(Peers.Where(p => selectedIds.Contains(p.MachineId)));
+        }
+        else if (SelectedPeer is not null)
+        {
+            targets.Add(SelectedPeer);
+        }
+
+        if (targets.Count == 0)
+        {
+            StatusBanner = "Vui lòng chọn ít nhất một nhân sự nhận việc.";
             return;
         }
 
@@ -145,27 +321,34 @@ public sealed partial class TaskManagementViewModel : ObservableObject
             ? new DateTimeOffset(NewTaskDueDate.Value.Date.AddHours(17).AddMinutes(30), DateTimeOffset.Now.Offset).ToUniversalTime()
             : null;
 
-        await _taskService.CreateAssignedTaskAsync(
-            SelectedPeer.MachineId,
-            SelectedPeer.Username,
-            SelectedPeer.FullName.Replace(" (Máy này)", string.Empty, StringComparison.Ordinal),
-            SelectedPeer.Role,
-            NewTaskTitle,
-            NewTaskDescription,
-            NewTaskPriority,
-            dueUtc,
-            string.IsNullOrWhiteSpace(NewTaskAttachmentPath) ? null : NewTaskAttachmentPath);
+        string? attachPath = string.IsNullOrWhiteSpace(NewTaskAttachmentPath) ? null : NewTaskAttachmentPath;
+        foreach (PeerDirectoryEntryDto target in targets)
+        {
+            await _taskService.CreateAssignedTaskAsync(
+                target.MachineId,
+                target.Username,
+                target.FullName.Replace(" (Máy này)", string.Empty, StringComparison.Ordinal),
+                target.Role,
+                NewTaskTitle,
+                NewTaskDescription,
+                NewTaskPriority,
+                dueUtc,
+                attachPath,
+                recurrenceRule: NewTaskRecurrence);
+        }
 
         int synced = await _peerTaskSync.FlushPendingTasksOnceAsync();
         NewTaskTitle = string.Empty;
         NewTaskDescription = string.Empty;
         NewTaskAttachmentPath = string.Empty;
 
-        StatusBanner = string.Equals(SelectedPeer.MachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase)
-            ? "Đã tạo công việc cho chính bạn."
-            : (synced > 0
-                ? $"Đã giao việc trực tiếp qua LAN tới {SelectedPeer.FullName}."
-                : $"Máy {SelectedPeer.FullName} đang ngoại tuyến — đã đưa vào hàng đợi và sẽ tự gửi khi Online.");
+        StatusBanner = targets.Count > 1
+            ? $"Đã giao việc lặp lại '{NewTaskRecurrence}' cho {targets.Count} người (đã đồng bộ ngay: {synced})."
+            : string.Equals(targets[0].MachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase)
+                ? "Đã tạo công việc cho chính bạn."
+                : (synced > 0
+                    ? $"Đã giao việc trực tiếp qua LAN tới {targets[0].FullName}."
+                    : $"Máy {targets[0].FullName} đang ngoại tuyến — đã đưa vào hàng đợi và sẽ tự gửi khi Online.");
 
         await RefreshAllAsync();
     }

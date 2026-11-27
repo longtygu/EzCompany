@@ -2,6 +2,46 @@
 
 Tất cả thay đổi đáng chú ý của dự án **Ez Company** được ghi lại tại đây theo chuẩn [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và [Semantic Versioning 2.0.0](https://semver.org/).
 
+## [0.6.0] - 2026-11-27 — Enterprise Suite (Tray/Startup, Avatars, Chat Upgrades, Tasks, Leave/Expense Approvals, Payslip PDF, Accounting Cashbook, Legal Contracts, Shared Vault, PDF Studio, KPI Charts & Auto-Backup)
+
+### Added — Enterprise Suite 10 Upgrades & Fixes
+- **System Tray & Khởi động cùng Windows (`SystemTrayService`, `WindowsStartupService`, `AppearanceSettings`, `AccountAndAppearanceView`)**:
+  - Đóng cửa sổ chính sẽ thu nhỏ ứng dụng xuống khay hệ thống (System Tray Win32 thuần, không kéo WinForms) kèm menu chuột phải `Mở Ez Company` / `Thoát ứng dụng hoàn toàn`.
+  - Tùy chọn tự động khởi động cùng Windows trong Registry người dùng (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`).
+- **Ảnh đại diện cá nhân & Nâng cấp Chat nội bộ (`UserAvatarService`, `ChatWorkspaceView`, `ManageChatGroupWindow`)**:
+  - Cho phép từng nhân viên tải ảnh đại diện cá nhân (tối đa 512 KB), đồng bộ P2P sang toàn công ty và hiển thị trên thanh nhân viên Chat.
+  - Thêm tìm kiếm tin nhắn theo nội dung/người gửi/tệp, xem trước ảnh trực tiếp trong bong bóng chat & nhấn để phóng to (`SnapshotViewerWindow`), trả lời trích dẫn (`ReplyToMessageId` / `ReplyPreviewText`), và cửa sổ Quản lý nhóm chat (đổi tên nhóm, thêm/bớt thành viên đồng bộ qua LAN).
+- **Quản lý công việc nâng cao (`WorkTaskService`, `TaskDeadlineReminderService`, `TaskManagementView`)**:
+  - Nhắc hạn công việc sắp tới/quá hạn qua popup thông báo (`TaskDeadlineReminderService`), thanh tìm kiếm & lọc trạng thái/ưu tiên, giao việc cho nhiều nhân viên cùng lúc, checklist công việc con (`SubtasksJson`), và công việc lặp lại định kỳ (`Daily` / `Weekly` / `Monthly`) tự sinh việc kế tiếp khi nghiệm thu hoàn thành.
+- **Quy trình Đơn Xin nghỉ phép / Nửa ngày / Đi muộn / Tăng ca (`LeaveRequestService`, `EmployeeRequestsView`, `HrAttendanceView`)**:
+  - Nhân viên gửi đơn trực tiếp, đồng bộ qua LAN; khi Giám đốc hoặc HR phê duyệt, hệ thống tự động cập nhật bản ghi chấm công/tăng ca tương ứng.
+- **Xuất & Gửi Phiếu lương PDF + Đồng bộ xóa chấm công + Gợi ý T7/CN/Lễ (`PayslipPdfExporter`, `HrAttendanceService`, `HrAttendanceView`, `AttendanceDetailViewModel`)**:
+  - Xuất Phiếu lương PDF từng nhân viên và gửi trực tiếp vào hộp chat riêng 1-1.
+  - Xóa ngày công theo cơ chế soft-delete tombstone (`IsDeleted`) đồng bộ LAN; bổ sung đánh dấu `T7`, `CN`, `Lễ` trên ma trận chấm công.
+- **Kế toán & Pháp chế nâng cao (`AccountingLedgerService`, `AccountingLedgerExcelExporter`, `AccountingInvoiceView`, `ContractRegistryService`, `ContractRegistryExcelExporter`, `LegalContractDiffView`)**:
+  - Tìm kiếm, lọc, cảnh báo và xóa hóa đơn XML; bổ sung Sổ quỹ Thu/Chi kèm xuất Excel và quy trình Đề xuất Tạm ứng / Thanh toán / Hoàn ứng (chi tiền tự ghi vào Sổ quỹ).
+  - Bổ sung Sổ theo dõi Hợp đồng & hạn hiệu lực (`Active` / `ExpiringSoon` / `Expired`), đẩy mốc nhắc hết hạn sang Bảng Lịch trình chung và xuất Excel Danh mục Hợp đồng.
+- **Kho Tài liệu Dùng chung Công ty & Studio PDF nâng cao (`SharedDocumentService`, `SharedDocumentsView`, `LocalPdfStudioService`, `OfficePdfStudioView`)**:
+  - Kho tài liệu nội bộ đồng bộ metadata LAN và tải tệp ngược P2P kèm kiểm tra SHA-256.
+  - Nâng cấp Văn phòng PDF với **Ảnh → PDF** nhiều trang và **Đóng dấu PNG Chữ ký / Con dấu** theo tọa độ % lên trang PDF.
+- **Trung tâm Phê duyệt tập trung, Biểu đồ KPI & Tự động Sao lưu Giám đốc (`ExecutiveDashboardView`, `ExecutiveDashboardViewModel`, `DirectorAutoBackupService`)**:
+  - Trung tâm duyệt tập trung Đơn nghỉ phép/OT và Đề xuất chi phí kèm badge thông báo trên thanh điều hướng.
+  - Biểu đồ thanh ngang trực quan cho tỷ lệ hoàn thành việc và giờ làm việc/đi muộn theo tháng.
+  - Lịch tự động sao lưu CSDL các máy trạm đang Online định kỳ kèm giữ lại N bản mới nhất/máy (`PruneBackupFiles`).
+
+### Fixed & Improved (Milestone 10)
+- **Sửa lỗi cửa sổ vẫn trong suốt ở mức `0% (Đặc)` (`AppearancePalette`, `WindowTransparencyHelper`, `AppearanceSettingsService`, `AccountAndAppearanceView`)**:
+  - Khi độ trong suốt đặt về `0%`, cửa sổ tự ép `WindowSurface` và `Panel` về alpha `255` (đặc 100%), đồng thời tắt tạm hiệu ứng DWM (`Mica`/`Acrylic`/`Blur`) và đặt `CompositionTarget.BackgroundColor` thành nền đặc thay vì trong suốt.
+- **Nâng cấp giao diện Chat nội bộ (`ChatWorkspaceView`, `ChatWorkspaceViewModel`, `ChatService`)**:
+  - Thay nhãn `● Tự động cập nhật 1s` bằng trạng thái kết nối mạng/LAN thực tế: `Đã kết nối LAN` (chữ xanh lá `#22C55E`) hoặc `Mất kết nối` (chữ đỏ `#EF4444` nhấp nháy).
+  - Thêm nút **Bỏ ghim** (`PinOff24`) ngay trên thẻ công việc đang ghim trong box chat và hỗ trợ đồng bộ gỡ ghim qua LAN (`UnpinTaskFromConversationAsync`).
+  - Thay nút chữ `Làm mới` bằng biểu tượng mũi tên xoay vòng (`ArrowSync24`) với ToolTip `Làm mới`.
+- **Nâng cấp mục Giám đốc (`ExecutiveDashboardView`, `ExecutiveDashboardViewModel`, `SnapshotViewerWindow`, `SnapshotViewerViewModel`)**:
+  - Thiết kế lại mục số 2 từ lưới bảng sang danh sách thẻ mở rộng dạng khay (giống Hồ sơ nhân viên) kèm tìm kiếm; bấm từng máy để xem thông số chi tiết và cấu hình phân quyền / gửi thông báo / sao chép DB / duyệt Vault ngay bên dưới.
+  - Bổ sung chọn, phóng to/thu nhỏ (Zoom `10%–800%`, vừa khung, lăn chuột, kéo rê ảnh, ảnh trước/sau), lưu ảnh và mở bằng ứng dụng xem ảnh mặc định cho mục số 4 (`SnapshotViewerWindow`).
+- **Chấm công sửa linh hoạt mọi ngày (`HrAttendanceService`, `AttendanceDetailWindow`, `AttendanceDetailViewModel`, `HrAttendanceViewModel`)**:
+  - Cho phép bấm trực tiếp vào bất kỳ ô ngày nào trong Bảng ma trận chấm công (kể cả ngày đã chấm công trước đó), tự tải dữ liệu hiện có lên khung chỉnh sửa để cập nhật hoặc xóa ngày công đó, đồng thời tự động đồng bộ trạng thái đã chấm / chưa chấm trên tab Chấm công tùy chỉnh.
+
 ## [0.5.0] - 2026-11-27 — Parallel Zoomable Timeline & Editor Window, Window Transparency %, Detachable Drag-to-Dock Chat & Presence Bar
 
 ### Added & Changed

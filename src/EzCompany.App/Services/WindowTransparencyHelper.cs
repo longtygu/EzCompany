@@ -76,14 +76,26 @@ public static class WindowTransparencyHelper
     public static bool SupportsSystemBackdropAttribute => OsBuild >= 22621;
     public static bool SupportsAcrylicAccent => OsBuild >= 17134;
 
-    public static string Apply(Window window, AppearancePalette palette, string backdropType, bool isDarkMode)
+    public static string Apply(
+        Window window,
+        AppearancePalette palette,
+        string backdropType,
+        bool isDarkMode,
+        bool forceOpaque = false)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(palette);
 
-        string normalizedBackdrop = NormalizeBackdropName(backdropType);
-        window.Background = new SolidColorBrush(palette.WindowSurface);
+        string requested = NormalizeBackdropName(backdropType);
+        string normalizedBackdrop = forceOpaque ? "None" : requested;
+        Color s = palette.WindowSurface;
+        Color solidSurface = Color.FromRgb(s.R, s.G, s.B);
+        window.Background = new SolidColorBrush(forceOpaque ? solidSurface : s);
         EnsureExtendedFrameChrome(window);
+
+        string description = forceOpaque
+            ? $"Đặc 100% (0% trong suốt{(requested != "None" ? $" — tạm tắt hiệu ứng {requested}" : string.Empty)}) — Windows build {OsBuild}"
+            : DescribeEffectiveMaterial(normalizedBackdrop);
 
         nint hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == nint.Zero)
@@ -94,15 +106,16 @@ public static class WindowTransparencyHelper
                 nint readyHwnd = new WindowInteropHelper(window).Handle;
                 if (readyHwnd != nint.Zero)
                 {
-                    ApplyNative(readyHwnd, palette, normalizedBackdrop, isDarkMode);
+                    ApplyNative(readyHwnd, palette, normalizedBackdrop, isDarkMode, forceOpaque, solidSurface);
                 }
             }
 
             window.SourceInitialized += OnSourceInitialized;
-            return DescribeEffectiveMaterial(normalizedBackdrop);
+            return description;
         }
 
-        return ApplyNative(hwnd, palette, normalizedBackdrop, isDarkMode);
+        ApplyNative(hwnd, palette, normalizedBackdrop, isDarkMode, forceOpaque, solidSurface);
+        return description;
     }
 
     public static void EnsureExtendedFrameChrome(Window window)
@@ -132,7 +145,13 @@ public static class WindowTransparencyHelper
             });
     }
 
-    private static string ApplyNative(nint hwnd, AppearancePalette palette, string normalizedBackdrop, bool isDarkMode)
+    private static void ApplyNative(
+        nint hwnd,
+        AppearancePalette palette,
+        string normalizedBackdrop,
+        bool isDarkMode,
+        bool forceOpaque,
+        Color solidSurface)
     {
         try
         {
@@ -154,7 +173,7 @@ public static class WindowTransparencyHelper
             HwndSource? source = HwndSource.FromHwnd(hwnd);
             if (source?.CompositionTarget is not null)
             {
-                source.CompositionTarget.BackgroundColor = Colors.Transparent;
+                source.CompositionTarget.BackgroundColor = forceOpaque ? solidSurface : Colors.Transparent;
             }
         }
         catch
@@ -163,8 +182,7 @@ public static class WindowTransparencyHelper
 
         ClearLayeredStyleIfPresent(hwnd);
         ApplyDarkModeFrame(hwnd, isDarkMode);
-        ApplyMaterial(hwnd, palette, normalizedBackdrop);
-        return DescribeEffectiveMaterial(normalizedBackdrop);
+        ApplyMaterial(hwnd, palette, forceOpaque ? "None" : normalizedBackdrop);
     }
 
     private static void ClearLayeredStyleIfPresent(nint hwnd)

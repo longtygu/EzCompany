@@ -20,6 +20,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<TimelinePlanEntity> TimelinePlans => Set<TimelinePlanEntity>();
     public DbSet<EmployeeProfileEntity> EmployeeProfiles => Set<EmployeeProfileEntity>();
     public DbSet<AttendanceRecordEntity> AttendanceRecords => Set<AttendanceRecordEntity>();
+    public DbSet<LeaveRequestEntity> LeaveRequests => Set<LeaveRequestEntity>();
+    public DbSet<CashbookEntryEntity> CashbookEntries => Set<CashbookEntryEntity>();
+    public DbSet<ExpenseRequestEntity> ExpenseRequests => Set<ExpenseRequestEntity>();
+    public DbSet<ContractRecordEntity> ContractRecords => Set<ContractRecordEntity>();
+    public DbSet<SharedDocumentEntity> SharedDocuments => Set<SharedDocumentEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -201,6 +206,75 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.EmployeeName).HasMaxLength(256).IsRequired();
             e.Property(x => x.DateKey).HasMaxLength(16).IsRequired();
             e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+        });
+
+        modelBuilder.Entity<LeaveRequestEntity>(e =>
+        {
+            e.ToTable("LeaveRequests");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.MachineId);
+            e.HasIndex(x => x.UpdatedAtUtc);
+            e.Property(x => x.EmployeeCode).HasMaxLength(64).IsRequired();
+            e.Property(x => x.EmployeeName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.MachineId).HasMaxLength(128).IsRequired();
+            e.Property(x => x.RequestType).HasMaxLength(32).IsRequired();
+            e.Property(x => x.StartDateKey).HasMaxLength(16).IsRequired();
+            e.Property(x => x.EndDateKey).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+        });
+
+        modelBuilder.Entity<CashbookEntryEntity>(e =>
+        {
+            e.ToTable("CashbookEntries");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.EntryDateKey);
+            e.HasIndex(x => x.EntryType);
+            e.Property(x => x.EntryDateKey).HasMaxLength(16).IsRequired();
+            e.Property(x => x.EntryType).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(128).IsRequired();
+            e.Property(x => x.PaymentMethod).HasMaxLength(32).IsRequired();
+        });
+
+        modelBuilder.Entity<ExpenseRequestEntity>(e =>
+        {
+            e.ToTable("ExpenseRequests");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.RequesterMachineId);
+            e.HasIndex(x => x.UpdatedAtUtc);
+            e.Property(x => x.RequesterMachineId).HasMaxLength(128).IsRequired();
+            e.Property(x => x.RequesterUsername).HasMaxLength(128).IsRequired();
+            e.Property(x => x.RequesterFullName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.RequestType).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+        });
+
+        modelBuilder.Entity<ContractRecordEntity>(e =>
+        {
+            e.ToTable("ContractRecords");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ExpiryDateKey);
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.ContractNumber).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(256).IsRequired();
+            e.Property(x => x.CounterpartyName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.ContractType).HasMaxLength(32).IsRequired();
+            e.Property(x => x.Status).HasMaxLength(32).IsRequired();
+        });
+
+        modelBuilder.Entity<SharedDocumentEntity>(e =>
+        {
+            e.ToTable("SharedDocuments");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Category);
+            e.HasIndex(x => x.UpdatedAtUtc);
+            e.Property(x => x.Title).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Category).HasMaxLength(64).IsRequired();
+            e.Property(x => x.FileName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.FileSha256).HasMaxLength(128).IsRequired();
+            e.Property(x => x.UploadedByMachineId).HasMaxLength(128).IsRequired();
         });
     }
 }

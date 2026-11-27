@@ -20,6 +20,7 @@ public sealed class LegalModule : IAppModule
         services.AddSingleton<DocxTextExtractor>();
         services.AddSingleton<ContractDiffService>();
         services.AddSingleton<ContractReportExporter>();
+        services.AddSingleton<ContractRegistryExcelExporter>();
         services.AddTransient<LegalContractDiffViewModel>();
         services.AddTransient<LegalContractDiffView>();
     }

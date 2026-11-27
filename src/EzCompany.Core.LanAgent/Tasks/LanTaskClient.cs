@@ -229,7 +229,9 @@ public sealed class LanTaskClient
                 SenderSignedPolicyJson: senderPolicyJson,
                 AssignmentFileName: task.AssignmentFileName,
                 AssignmentFileSha256: task.AssignmentFileSha256,
-                AssignmentFileBase64: assignmentFileBase64);
+                AssignmentFileBase64: assignmentFileBase64,
+                SubtasksJson: task.SubtasksJson,
+                RecurrenceRule: task.RecurrenceRule);
 
             string baseUrl = NormalizeBaseUrl(targetEndpoint);
             byte[] bodyBytes = JsonSerializer.SerializeToUtf8Bytes(payload);

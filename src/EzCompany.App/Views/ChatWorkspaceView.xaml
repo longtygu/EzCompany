@@ -170,7 +170,34 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Chat nội bộ" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
-                                <TextBlock Text="● Tự động cập nhật 1s" FontSize="11" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" />
+                                <Grid Margin="0,2,0,0">
+                                    <TextBlock Text="{Binding ConnectionStatusText}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="#22C55E"
+                                               Visibility="{Binding IsLanConnected, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock Text="{Binding ConnectionStatusText}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="#EF4444"
+                                               Visibility="{Binding IsLanDisconnected, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsLanDisconnected}" Value="True">
+                                                        <DataTrigger.EnterActions>
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1.0" To="0.20" Duration="0:0:0.60" />
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </DataTrigger.EnterActions>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
                             </StackPanel>
                             <ui:Button Grid.Column="1"
                                        Appearance="Primary"
@@ -296,12 +323,34 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="{Binding SelectedConversation.Name}" FontSize="{DynamicResource AppFontSizeHeading}" FontWeight="Bold" />
                                 <TextBlock Text="{Binding StatusBanner}" FontSize="{DynamicResource AppFontSizeSmall}" Opacity="0.8" Visibility="{Binding StatusBanner, Converter={StaticResource NotEmptyToVis}}" />
                             </StackPanel>
-                            <ui:Button Grid.Column="1" Content="Làm mới" Command="{Binding RefreshAllCommand}" />
+                            <ui:TextBox Grid.Column="1"
+                                        Text="{Binding MessageSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="Tìm tin nhắn..."
+                                        Width="185"
+                                        VerticalAlignment="Center" />
+                            <ui:Button Grid.Column="3"
+                                       Appearance="Secondary"
+                                       Content="Quản lý nhóm"
+                                       Command="{Binding RequestOpenManageGroupWindowCommand}"
+                                       Visibility="{Binding SelectedConversation.IsGroupConversation, Converter={StaticResource BoolToVis}}"
+                                       VerticalAlignment="Center" />
+                            <ui:Button Grid.Column="5"
+                                       Appearance="Transparent"
+                                       Padding="8,6"
+                                       VerticalAlignment="Top"
+                                       ToolTip="Làm mới"
+                                       Command="{Binding RefreshAllCommand}">
+                                <ui:SymbolIcon Symbol="ArrowSync24" FontSize="18" />
+                            </ui:Button>
                         </Grid>
 
                         <!-- Pinned Task Banner -->
@@ -312,10 +361,28 @@
                                 BorderThickness="1"
                                 BorderBrush="{DynamicResource AppAccentBrush}"
                                 Visibility="{Binding SelectedConversation.PinnedTaskSummary, Converter={StaticResource NotEmptyToVis}}">
-                            <StackPanel>
-                                <TextBlock Text="CÔNG VIỆC ĐANG GHIM TRONG NHÓM" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" />
-                                <TextBlock Text="{Binding SelectedConversation.PinnedTaskSummary}" TextWrapping="Wrap" Margin="0,2,0,0" FontWeight="SemiBold" />
-                            </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="CÔNG VIỆC ĐANG GHIM TRONG NHÓM" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" />
+                                    <TextBlock Text="{Binding SelectedConversation.PinnedTaskSummary}" TextWrapping="Wrap" Margin="0,2,0,0" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <ui:Button Grid.Column="2"
+                                           Appearance="Secondary"
+                                           Padding="8,4"
+                                           VerticalAlignment="Center"
+                                           Command="{Binding UnpinTaskCommand}"
+                                           ToolTip="Bỏ ghim (đồng bộ tới thành viên)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="PinOff24" FontSize="15" Margin="0,0,5,0" />
+                                        <TextBlock Text="Bỏ ghim" FontSize="12" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </ui:Button>
+                            </Grid>
                         </Border>
 
                         <!-- Pin Task Picker -->
@@ -408,6 +475,24 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Reply Preview Banner -->
+                        <Border Padding="8,6"
+                                Margin="0,0,0,6"
+                                CornerRadius="8"
+                                Background="{DynamicResource AppCardInnerBackgroundBrush}"
+                                BorderThickness="2,0,0,0"
+                                BorderBrush="{DynamicResource AppAccentBrush}"
+                                Visibility="{Binding HasReplyingToMessage, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding ReplyingToPreview}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                <ui:Button Grid.Column="1" Content="✕ Hủy" Padding="8,2" Appearance="Transparent" Command="{Binding CancelReplyCommand}" />
+                            </Grid>
+                        </Border>
+
                         <TextBlock Text="{Binding DraftAttachmentPath, StringFormat='Tệp đính kèm: {0}'}"
                                    FontSize="11"
                                    Opacity="0.8"
@@ -435,9 +520,9 @@
                         </Grid>
                     </StackPanel>
 
-                    <!-- Message Stream (Left/Right Chat Bubbles + Stickers) -->
+                    <!-- Message Stream (Left/Right Chat Bubbles + Stickers + Inline Images + Reply) -->
                     <ScrollViewer x:Name="MessageScrollViewer" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
-                        <ItemsControl ItemsSource="{Binding Messages}">
+                        <ItemsControl ItemsSource="{Binding VisibleMessages}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Margin="0,0,0,10">
@@ -472,8 +557,16 @@
                                                 <StackPanel>
                                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                                         <TextBlock Text="{Binding SenderFullName}" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" Margin="0,0,10,0" />
-                                                        <TextBlock Text="{Binding SentTimeLocal}" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{Binding SentTimeLocal}" FontSize="11" Opacity="0.65" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                        <ui:Button Content="↩ Trả lời" Padding="6,1" FontSize="10.5" Appearance="Transparent"
+                                                                   Command="{Binding DataContext.StartReplyCommand, ElementName=ChatRoot}"
+                                                                   CommandParameter="{Binding}" />
                                                     </StackPanel>
+                                                    <Border Margin="0,0,0,6" Padding="8,4" CornerRadius="4" Background="#22000000"
+                                                            BorderThickness="2,0,0,0" BorderBrush="{DynamicResource AppAccentBrush}"
+                                                            Visibility="{Binding HasReplyPreview, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="{Binding ReplyPreviewText}" FontSize="11.5" Opacity="0.85" TextWrapping="Wrap" />
+                                                    </Border>
                                                     <Image Source="{Binding StickerImage}"
                                                            Width="128"
                                                            Height="128"
@@ -483,6 +576,13 @@
                                                     <TextBlock Text="{Binding Content}"
                                                                TextWrapping="Wrap"
                                                                Visibility="{Binding IsSticker, Converter={StaticResource InvBoolToVis}}" />
+                                                    <Button Background="Transparent" BorderThickness="0" Padding="0" Margin="0,6,0,0"
+                                                            Cursor="Hand" ToolTip="Bấm để phóng to ảnh"
+                                                            Visibility="{Binding HasInlineImage, Converter={StaticResource BoolToVis}}"
+                                                            Command="{Binding DataContext.PreviewImageMessageCommand, ElementName=ChatRoot}"
+                                                            CommandParameter="{Binding}">
+                                                        <Image Source="{Binding InlineImage}" MaxWidth="260" MaxHeight="200" Stretch="Uniform" />
+                                                    </Button>
                                                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasFileAttachment, Converter={StaticResource BoolToVis}}">
                                                         <TextBlock Text="{Binding AttachmentFileName, StringFormat='📎 {0}'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
                                                         <ui:Button Content="Mở / Tải ngược từ LAN"
@@ -505,9 +605,17 @@
                                                 Visibility="{Binding IsOwnMessage, Converter={StaticResource BoolToVis}}">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,4">
+                                                    <ui:Button Content="↩ Trả lời" Padding="6,1" FontSize="10.5" Appearance="Transparent" Margin="0,0,8,0"
+                                                               Command="{Binding DataContext.StartReplyCommand, ElementName=ChatRoot}"
+                                                               CommandParameter="{Binding}" />
                                                     <TextBlock Text="Bạn" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}" Margin="0,0,10,0" />
                                                     <TextBlock Text="{Binding SentTimeLocal}" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />
                                                 </StackPanel>
+                                                <Border Margin="0,0,0,6" Padding="8,4" CornerRadius="4" Background="#22000000"
+                                                        BorderThickness="2,0,0,0" BorderBrush="{DynamicResource AppAccentBrush}"
+                                                        Visibility="{Binding HasReplyPreview, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="{Binding ReplyPreviewText}" FontSize="11.5" Opacity="0.85" TextWrapping="Wrap" />
+                                                </Border>
                                                 <Image Source="{Binding StickerImage}"
                                                        Width="128"
                                                        Height="128"
@@ -517,6 +625,13 @@
                                                 <TextBlock Text="{Binding Content}"
                                                            TextWrapping="Wrap"
                                                            Visibility="{Binding IsSticker, Converter={StaticResource InvBoolToVis}}" />
+                                                <Button Background="Transparent" BorderThickness="0" Padding="0" Margin="0,6,0,0"
+                                                        HorizontalAlignment="Right" Cursor="Hand" ToolTip="Bấm để phóng to ảnh"
+                                                        Visibility="{Binding HasInlineImage, Converter={StaticResource BoolToVis}}"
+                                                        Command="{Binding DataContext.PreviewImageMessageCommand, ElementName=ChatRoot}"
+                                                        CommandParameter="{Binding}">
+                                                    <Image Source="{Binding InlineImage}" MaxWidth="260" MaxHeight="200" Stretch="Uniform" />
+                                                </Button>
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0" Visibility="{Binding HasFileAttachment, Converter={StaticResource BoolToVis}}">
                                                     <TextBlock Text="{Binding AttachmentFileName, StringFormat='📎 {0}'}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
                                                     <ui:Button Content="Mở tệp"

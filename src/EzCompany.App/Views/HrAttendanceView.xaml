@@ -276,6 +276,13 @@
                                 <TextBlock Text="Chấm công theo Giờ tùy chỉnh (Nhập chuẩn tránh sai lệch không có máy chấm công)"
                                            FontSize="{DynamicResource AppFontSizeHeading}"
                                            FontWeight="SemiBold"
+                                           Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding AttendanceFormModeText}"
+                                           FontSize="{DynamicResource AppFontSizeSmall}"
+                                           Foreground="{DynamicResource AppAccentBrush}"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding AttendanceFormModeText, Converter={StaticResource NotEmptyToVis}}"
                                            Margin="0,0,0,10" />
 
                                 <Grid>
@@ -343,6 +350,8 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="10" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
                                         <TextBlock Text="Trạng thái" FontSize="{DynamicResource AppFontSizeSmall}" Margin="0,0,0,3" />
@@ -362,8 +371,12 @@
                                     </StackPanel>
                                     <ui:Button Grid.Column="8"
                                                VerticalAlignment="Bottom"
+                                               Content="Xóa chấm công ngày này"
+                                               Command="{Binding DeleteAttendanceForSelectedDayCommand}" />
+                                    <ui:Button Grid.Column="10"
+                                               VerticalAlignment="Bottom"
                                                Appearance="Primary"
-                                               Content="Lưu chấm công tùy chỉnh"
+                                               Content="{Binding SaveAttendanceButtonText}"
                                                Command="{Binding SaveCustomAttendanceCommand}" />
                                 </Grid>
                             </StackPanel>
@@ -407,7 +420,9 @@
                             <TextBlock Text="Năm:" VerticalAlignment="Center" Margin="0,0,6,0" />
                             <ui:TextBox Text="{Binding SelectedYear, UpdateSourceTrigger=PropertyChanged}" Width="80" Margin="0,0,12,0" />
                             <ui:Button Appearance="Primary" Content="Tính lại bảng lương" Command="{Binding RecalculatePayrollCommand}" Margin="0,0,10,0" />
-                            <ui:Button Appearance="Secondary" Content="Xuất Bảng lương Excel (.xlsx)" Command="{Binding ExportPayrollExcelCommand}" />
+                            <ui:Button Appearance="Secondary" Content="Xuất Bảng lương Excel (.xlsx)" Command="{Binding ExportPayrollExcelCommand}" Margin="0,0,10,0" />
+                            <ui:Button Appearance="Secondary" Content="Xuất Phiếu lương (.pdf)" Command="{Binding ExportSelectedPayslipPdfCommand}" Margin="0,0,10,0" />
+                            <ui:Button Appearance="Secondary" Content="Gửi Phiếu lương qua Chat riêng" Command="{Binding SendSelectedPayslipToChatCommand}" />
                         </WrapPanel>
 
                         <Border Padding="{DynamicResource AppCardPadding}"
@@ -427,7 +442,7 @@
                             </StackPanel>
                         </Border>
 
-                        <DataGrid ItemsSource="{Binding PayrollRows}" AutoGenerateColumns="False" CanUserAddRows="False" MaxHeight="360">
+                        <DataGrid ItemsSource="{Binding PayrollRows}" SelectedItem="{Binding SelectedPayrollRow}" AutoGenerateColumns="False" CanUserAddRows="False" MaxHeight="360">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Mã NV" Binding="{Binding EmployeeCode}" IsReadOnly="True" Width="80" />
                                 <DataGridTextColumn Header="Họ tên" Binding="{Binding EmployeeName}" IsReadOnly="True" Width="150" />
@@ -442,6 +457,59 @@
                                 <DataGridTextColumn Header="Thực lĩnh (VNĐ)" Binding="{Binding NetSalaryVnd, StringFormat=N0}" IsReadOnly="True" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
+                    </StackPanel>
+                </TabItem>
+
+                <!-- Tab 4: Leave / HalfDay / Late / Overtime Request Approval -->
+                <TabItem Header="4. Duyệt Đơn Nghỉ phép / Tăng ca">
+                    <StackPanel Margin="0,12,0,0">
+                        <WrapPanel Margin="0,0,0,10" VerticalAlignment="Center">
+                            <CheckBox Content="Chỉ hiện đơn đang chờ duyệt"
+                                      IsChecked="{Binding ShowPendingLeaveOnly, Mode=TwoWay}"
+                                      Margin="0,0,14,0" />
+                            <ui:Button Appearance="Secondary"
+                                       Content="Làm mới danh sách đơn"
+                                       Command="{Binding RefreshLeaveRequestsCommand}" />
+                        </WrapPanel>
+
+                        <DataGrid ItemsSource="{Binding LeaveRequests}"
+                                  SelectedItem="{Binding SelectedLeaveRequest}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  MaxHeight="280"
+                                  Margin="0,0,0,12">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Nhân viên" Binding="{Binding EmployeeName}" Width="150" />
+                                <DataGridTextColumn Header="Loại đơn" Binding="{Binding RequestType}" Width="90" />
+                                <DataGridTextColumn Header="Từ ngày" Binding="{Binding StartDateKey}" Width="95" />
+                                <DataGridTextColumn Header="Đến ngày" Binding="{Binding EndDateKey}" Width="95" />
+                                <DataGridTextColumn Header="OT (h)" Binding="{Binding OvertimeHours, StringFormat=F1}" Width="65" />
+                                <DataGridTextColumn Header="Lý do" Binding="{Binding Reason}" Width="*" />
+                                <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="95" />
+                                <DataGridTextColumn Header="Người duyệt" Binding="{Binding ReviewedByName}" Width="125" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox Grid.Column="0"
+                                        Text="{Binding LeaveReviewNotes, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="Ghi chú duyệt đơn hoặc lý do từ chối..."
+                                        Margin="0,0,10,0" />
+                            <ui:Button Grid.Column="1"
+                                       Appearance="Primary"
+                                       Content="Duyệt đơn (Tự cập nhật chấm công)"
+                                       Command="{Binding ApproveLeaveRequestCommand}"
+                                       Margin="0,0,8,0" />
+                            <ui:Button Grid.Column="2"
+                                       Appearance="Secondary"
+                                       Content="Từ chối"
+                                       Command="{Binding RejectLeaveRequestCommand}" />
+                        </Grid>
                     </StackPanel>
                 </TabItem>
             </TabControl>

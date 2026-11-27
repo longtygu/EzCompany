@@ -18,6 +18,11 @@ public partial class HrAttendanceView : UserControl
         viewModel.ConfirmDeleteCallback = (message, title) =>
             MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
 
+        viewModel.LeaveRequestsRefreshRequested += (_, _) =>
+        {
+            Dispatcher.InvokeAsync(async () => await viewModel.RefreshLeaveRequestsAsync());
+        };
+
         viewModel.OpenFullAttendanceWindowRequested += async (_, ym) =>
         {
             AttendanceDetailWindow win = _services.GetRequiredService<AttendanceDetailWindow>();

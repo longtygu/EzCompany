@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -26,6 +27,52 @@ public sealed class SnapshotTimelineItem
     public BitmapImage? ThumbnailImage { get; init; }
 }
 
+public sealed partial class WorkstationCardItem : ObservableObject
+{
+    public required PairedDeviceEntity Entity { get; init; }
+    public Action<WorkstationCardItem, bool>? ExpandedChangedCallback { get; init; }
+
+    public string MachineId => Entity.MachineId;
+    public string FullName => string.IsNullOrWhiteSpace(Entity.FullName) ? Entity.Username : Entity.FullName;
+    public string Username => Entity.Username;
+    public string RoleBilingual => CompanyRoles.FormatRolesBilingual(Entity.Role);
+    public bool IsOnline => Entity.IsOnline;
+    public bool IsOffline => !Entity.IsOnline;
+    public string OnlineText => Entity.IsOnline ? "Online" : "Offline";
+    public string AppVersionText => $"v{Entity.AppVersion}";
+    public string PolicyVersionText => $"Policy v{Entity.CurrentPolicyVersion}";
+    public string EndpointText => string.IsNullOrWhiteSpace(Entity.LastKnownIp) || Entity.LastKnownPort <= 0
+        ? "—"
+        : $"{Entity.LastKnownIp}:{Entity.LastKnownPort}";
+    public string FreeDiskText => Entity.FreeDiskPercent > 0 ? $"{Entity.FreeDiskPercent:F1}%" : "—";
+    public string StorageText => $"{(Entity.DbSizeBytes + Entity.VaultSizeBytes) / 1048576.0:F2} MB (DB {Entity.DbSizeBytes / 1048576.0:F2} • Vault {Entity.VaultSizeBytes / 1048576.0:F2})";
+    public string LastSeenText => Entity.LastSeenUtc?.ToLocalTime().ToString("HH:mm dd/MM/yyyy") ?? "Chưa ghi nhận";
+    public string LastBackupText => Entity.LastBackupUtc?.ToLocalTime().ToString("HH:mm dd/MM/yyyy") ?? "Chưa sao lưu";
+    public string PairedText => $"{Entity.PairedAtUtc.ToLocalTime():dd/MM/yyyy} bởi {(string.IsNullOrWhiteSpace(Entity.PairedByAdminName) ? "—" : Entity.PairedByAdminName)}";
+    public string PendingPolicyText => string.IsNullOrWhiteSpace(Entity.PendingPolicyJson)
+        ? "Không có phân quyền chờ"
+        : "Có phân quyền đang chờ đẩy (máy Offline)";
+
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    partial void OnIsExpandedChanged(bool value) => ExpandedChangedCallback?.Invoke(this, value);
+}
+
+public sealed record EmployeeTaskChartRow(
+    string Name,
+    int Completed,
+    int Total,
+    string SummaryText,
+    double BarWidth);
+
+public sealed record EmployeeAttendanceChartRow(
+    string Name,
+    double WorkedHours,
+    int LateDays,
+    string SummaryText,
+    double BarWidth);
+
 public sealed partial class ExecutiveDashboardViewModel : ObservableObject
 {
     private readonly IDbContextFactory<AppDbContext> _appDbFactory;
@@ -35,6 +82,10 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     private readonly DirectorLanClient _lanClient;
     private readonly DirectorFleetSyncService _fleetSync;
     private readonly DirectorTelemetryPullService _telemetryPull;
+    private readonly LeaveRequestService _leaveService;
+    private readonly AccountingLedgerService _ledgerService;
+    private readonly EzCompany.Core.LanAgent.Collaboration.LanCollaborationClient _collabClient;
+    private readonly DirectorAutoBackupService _autoBackup;
     private readonly ILocalStoragePaths _paths;
     private readonly ISessionContext _session;
     private readonly IAuditLogger _audit;
@@ -48,6 +99,10 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
         DirectorLanClient lanClient,
         DirectorFleetSyncService fleetSync,
         DirectorTelemetryPullService telemetryPull,
+        LeaveRequestService leaveService,
+        AccountingLedgerService ledgerService,
+        EzCompany.Core.LanAgent.Collaboration.LanCollaborationClient collabClient,
+        DirectorAutoBackupService autoBackup,
         ILocalStoragePaths paths,
         ISessionContext session,
         IAuditLogger audit,
@@ -60,21 +115,38 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
         _lanClient = lanClient;
         _fleetSync = fleetSync;
         _telemetryPull = telemetryPull;
+        _leaveService = leaveService;
+        _ledgerService = ledgerService;
+        _collabClient = collabClient;
+        _autoBackup = autoBackup;
         _paths = paths;
         _session = session;
         _audit = audit;
         _eventBus = eventBus;
 
+        DirectorAutoBackupConfig cfg = _autoBackup.GetConfig();
+        _autoBackupEnabled = cfg.Enabled;
+        _autoBackupIntervalHours = cfg.IntervalHours;
+        _autoBackupRetentionCount = cfg.RetentionCountPerDevice;
+        _autoBackupLastSummary = cfg.LastRunSummary;
+
         _eventBus.Subscribe<PasswordResetRequestedEvent>(_ => PasswordResetsRefreshRequested?.Invoke(this, EventArgs.Empty));
+        _eventBus.Subscribe<LeaveRequestUpdatedEvent>(_ => ApprovalHubRefreshRequested?.Invoke(this, EventArgs.Empty));
+        _eventBus.Subscribe<ExpenseRequestUpdatedEvent>(_ => ApprovalHubRefreshRequested?.Invoke(this, EventArgs.Empty));
     }
 
     public ObservableCollection<PairedDeviceEntity> Workstations { get; } = [];
+    public ObservableCollection<WorkstationCardItem> WorkstationCards { get; } = [];
     public ObservableCollection<PendingPairingRequest> PendingPairings { get; } = [];
     public ObservableCollection<PasswordResetRequestEntity> PendingPasswordResets { get; } = [];
     public ObservableCollection<AuditLogEntity> RecentAuditLogs { get; } = [];
     public ObservableCollection<AppUsageRecordEntity> TopAppUsages { get; } = [];
     public ObservableCollection<SnapshotTimelineItem> SnapshotTimeline { get; } = [];
     public ObservableCollection<VaultFileEntryDto> SelectedVaultFiles { get; } = [];
+    public ObservableCollection<LeaveRequestEntity> PendingLeaveRequests { get; } = [];
+    public ObservableCollection<ExpenseRequestEntity> PendingExpenseRequests { get; } = [];
+    public ObservableCollection<EmployeeTaskChartRow> EmployeeTaskCharts { get; } = [];
+    public ObservableCollection<EmployeeAttendanceChartRow> EmployeeAttendanceCharts { get; } = [];
 
     public IReadOnlyList<string> AvailableRoles { get; } = CompanyRoles.All;
     public IReadOnlyList<string> AvailableChannels { get; } = ["stable", "beta"];
@@ -86,8 +158,24 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     [ObservableProperty] private string _kpiRedAlertsText = "0";
     [ObservableProperty] private string _kpiAlertDetails = "Không có cảnh báo";
 
+    // Approval Hub
+    [ObservableProperty] private LeaveRequestEntity? _selectedPendingLeave;
+    [ObservableProperty] private ExpenseRequestEntity? _selectedPendingExpense;
+    [ObservableProperty] private string _approvalReviewNotes = string.Empty;
+    [ObservableProperty] private int _pendingLeaveCount;
+    [ObservableProperty] private int _pendingExpenseCount;
+    [ObservableProperty] private string _approvalHubSummaryText = "Không có đơn chờ duyệt";
+
+    // Auto-Backup Config
+    [ObservableProperty] private bool _autoBackupEnabled;
+    [ObservableProperty] private int _autoBackupIntervalHours = 24;
+    [ObservableProperty] private int _autoBackupRetentionCount = 7;
+    [ObservableProperty] private string _autoBackupLastSummary = "Chưa chạy sao lưu tự động.";
+
     // Selected Workstation & Actions (Multi-role support)
     [ObservableProperty] private PairedDeviceEntity? _selectedWorkstation;
+    [ObservableProperty] private string _workstationSearchQuery = string.Empty;
+    private bool _suppressCardCallbacks;
     [ObservableProperty] private bool _editRoleDirector;
     [ObservableProperty] private bool _editRoleAccounting;
     [ObservableProperty] private bool _editRoleLegal;
@@ -117,18 +205,37 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     [ObservableProperty] private bool _approveOffice = true;
 
     // Release Governance
-    [ObservableProperty] private string _fleetMaxApprovedVersion = "0.5.0";
+    [ObservableProperty] private string _fleetMaxApprovedVersion = "0.6.0";
     [ObservableProperty] private string _fleetAllowedChannel = "stable";
 
     // Snapshot Viewer
     [ObservableProperty] private SnapshotTimelineItem? _selectedSnapshot;
     [ObservableProperty] private BitmapImage? _fullPreviewImage;
+    private byte[]? _currentFullJpeg;
 
     [ObservableProperty] private string _statusBanner = string.Empty;
     [ObservableProperty] private bool _isBusy;
 
     public event EventHandler<string>? InspectDatabaseRequested;
     public event EventHandler? PasswordResetsRefreshRequested;
+    public event EventHandler? ApprovalHubRefreshRequested;
+    public event EventHandler<SnapshotViewerViewModel>? SnapshotViewerRequested;
+
+    partial void OnWorkstationSearchQueryChanged(string value)
+    {
+        string? expandedId = WorkstationCards.FirstOrDefault(c => c.IsExpanded)?.MachineId ?? SelectedWorkstation?.MachineId;
+        RebuildWorkstationCards(expandedId);
+    }
+
+    partial void OnSelectedSnapshotChanged(SnapshotTimelineItem? value)
+    {
+        _currentFullJpeg = null;
+        FullPreviewImage = value?.ThumbnailImage;
+        if (value is not null)
+        {
+            _ = ViewFullSnapshotAsync();
+        }
+    }
 
     partial void OnApproveRoleDirectorChanged(bool value) => SyncApproveModulesFromRoles();
     partial void OnApproveRoleAccountingChanged(bool value) => SyncApproveModulesFromRoles();
@@ -218,14 +325,19 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
                 .ThenBy(d => d.FullName)
                 .ToListAsync();
 
-            string? prevMachineId = SelectedWorkstation?.MachineId;
+            string? expandedId = WorkstationCards.FirstOrDefault(c => c.IsExpanded)?.MachineId;
+            string? prevMachineId = expandedId ?? SelectedWorkstation?.MachineId;
             Workstations.Clear();
             foreach (PairedDeviceEntity d in devices)
             {
                 Workstations.Add(d);
             }
 
-            SelectedWorkstation = Workstations.FirstOrDefault(w => w.MachineId == prevMachineId)
+            RebuildWorkstationCards(expandedId);
+            SelectedWorkstation = (expandedId is not null
+                                      ? Workstations.FirstOrDefault(w => string.Equals(w.MachineId, expandedId, StringComparison.OrdinalIgnoreCase))
+                                      : null)
+                                  ?? Workstations.FirstOrDefault(w => string.Equals(w.MachineId, prevMachineId, StringComparison.OrdinalIgnoreCase))
                                   ?? Workstations.FirstOrDefault();
 
             int onlineCount = devices.Count(d => d.IsOnline);
@@ -319,6 +431,9 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
             RefreshPendingPairingsList();
             RefreshPairingCountdown();
             await RefreshPendingPasswordResetsAsync();
+            await RefreshApprovalHubAsync();
+            await RefreshVisualChartsAsync(appDb);
+            AutoBackupLastSummary = _autoBackup.GetConfig().LastRunSummary;
         }
         catch (Exception ex)
         {
@@ -436,12 +551,77 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
         await RefreshPendingPasswordResetsAsync();
     }
 
+    private void RebuildWorkstationCards(string? expandedMachineId)
+    {
+        string q = ChatWorkspaceViewModel.NormalizeForSearch(WorkstationSearchQuery);
+        IEnumerable<PairedDeviceEntity> filtered = string.IsNullOrEmpty(q)
+            ? Workstations
+            : Workstations.Where(d =>
+                ChatWorkspaceViewModel.NormalizeForSearch(d.FullName).Contains(q, StringComparison.Ordinal) ||
+                ChatWorkspaceViewModel.NormalizeForSearch(d.Username).Contains(q, StringComparison.Ordinal) ||
+                ChatWorkspaceViewModel.NormalizeForSearch(d.Role).Contains(q, StringComparison.Ordinal) ||
+                ChatWorkspaceViewModel.NormalizeForSearch(CompanyRoles.FormatRolesBilingual(d.Role)).Contains(q, StringComparison.Ordinal) ||
+                ChatWorkspaceViewModel.NormalizeForSearch(d.MachineId).Contains(q, StringComparison.Ordinal));
+
+        _suppressCardCallbacks = true;
+        try
+        {
+            WorkstationCards.Clear();
+            foreach (PairedDeviceEntity d in filtered)
+            {
+                WorkstationCards.Add(new WorkstationCardItem
+                {
+                    Entity = d,
+                    ExpandedChangedCallback = OnWorkstationCardExpandedChanged,
+                    IsExpanded = !string.IsNullOrEmpty(expandedMachineId) &&
+                                 string.Equals(d.MachineId, expandedMachineId, StringComparison.OrdinalIgnoreCase)
+                });
+            }
+        }
+        finally
+        {
+            _suppressCardCallbacks = false;
+        }
+    }
+
+    private void OnWorkstationCardExpandedChanged(WorkstationCardItem card, bool expanded)
+    {
+        if (_suppressCardCallbacks || !expanded)
+        {
+            return;
+        }
+
+        _suppressCardCallbacks = true;
+        try
+        {
+            foreach (WorkstationCardItem other in WorkstationCards)
+            {
+                if (!ReferenceEquals(other, card) && other.IsExpanded)
+                {
+                    other.IsExpanded = false;
+                }
+            }
+        }
+        finally
+        {
+            _suppressCardCallbacks = false;
+        }
+
+        if (!string.Equals(SelectedWorkstation?.MachineId, card.MachineId, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedVaultFiles.Clear();
+            SelectedVaultFile = null;
+        }
+
+        SelectedWorkstation = card.Entity;
+    }
+
     [RelayCommand]
     private async Task ApplyPolicyToSelectedWorkstationAsync()
     {
         if (SelectedWorkstation is null)
         {
-            StatusBanner = "Vui lòng chọn máy trạm trong lưới.";
+            StatusBanner = "Vui lòng mở (chọn) một máy trạm trong danh sách.";
             return;
         }
 
@@ -577,7 +757,8 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
     [RelayCommand]
     private async Task ViewFullSnapshotAsync()
     {
-        if (SelectedSnapshot is null)
+        SnapshotTimelineItem? target = SelectedSnapshot;
+        if (target is null)
         {
             StatusBanner = "Chọn một ảnh thumbnail trong dòng thời gian.";
             return;
@@ -585,13 +766,106 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
 
         try
         {
-            byte[] fullJpeg = await _telemetryPull.GetOrFetchDecryptedFullSnapshotAsync(SelectedSnapshot.Id);
+            byte[] fullJpeg = await _telemetryPull.GetOrFetchDecryptedFullSnapshotAsync(target.Id);
+            if (!string.Equals(SelectedSnapshot?.Id.ToString(), target.Id.ToString(), StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _currentFullJpeg = fullJpeg;
             FullPreviewImage = DecodeJpegToBitmapImage(fullJpeg);
-            StatusBanner = $"Đã giải mã ảnh rõ nét 1280px của {SelectedSnapshot.Username}.";
+            StatusBanner = $"Đã giải mã ảnh rõ nét 1280px của {target.Username}.";
         }
         catch (Exception ex)
         {
             StatusBanner = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void OpenSnapshotViewer()
+    {
+        if (SnapshotTimeline.Count == 0)
+        {
+            StatusBanner = "Chưa có ảnh chụp nào.";
+            return;
+        }
+
+        int idx = SelectedSnapshot is null ? 0 : SnapshotTimeline.IndexOf(SelectedSnapshot);
+        if (idx < 0)
+        {
+            idx = 0;
+        }
+
+        var viewerVm = new SnapshotViewerViewModel(
+            SnapshotTimeline.ToArray(),
+            idx,
+            item => _telemetryPull.GetOrFetchDecryptedFullSnapshotAsync(item.Id),
+            Path.Combine(_paths.DirectorCacheDirectory, "SnapshotExports"));
+
+        SnapshotViewerRequested?.Invoke(this, viewerVm);
+    }
+
+    [RelayCommand]
+    private async Task OpenSnapshotExternallyAsync()
+    {
+        SnapshotTimelineItem? target = SelectedSnapshot;
+        if (target is null)
+        {
+            StatusBanner = "Chọn một ảnh thumbnail trong dòng thời gian.";
+            return;
+        }
+
+        try
+        {
+            byte[] bytes = _currentFullJpeg ?? await _telemetryPull.GetOrFetchDecryptedFullSnapshotAsync(target.Id);
+            _currentFullJpeg = bytes;
+            string exportDir = Path.Combine(_paths.DirectorCacheDirectory, "SnapshotExports");
+            Directory.CreateDirectory(exportDir);
+            string destPath = Path.Combine(exportDir, SnapshotViewerViewModel.BuildExportFileName(target));
+            await File.WriteAllBytesAsync(destPath, bytes);
+            Process.Start(new ProcessStartInfo(destPath)
+            {
+                UseShellExecute = true
+            });
+            StatusBanner = $"Đã mở ảnh bằng ứng dụng xem ảnh mặc định: {Path.GetFileName(destPath)}";
+        }
+        catch (Exception ex)
+        {
+            StatusBanner = $"Không thể mở ảnh: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveSnapshotAsAsync()
+    {
+        SnapshotTimelineItem? target = SelectedSnapshot;
+        if (target is null)
+        {
+            StatusBanner = "Chọn một ảnh thumbnail trong dòng thời gian.";
+            return;
+        }
+
+        try
+        {
+            byte[] bytes = _currentFullJpeg ?? await _telemetryPull.GetOrFetchDecryptedFullSnapshotAsync(target.Id);
+            _currentFullJpeg = bytes;
+            var dialog = new SaveFileDialog
+            {
+                Title = "Lưu ảnh chụp màn hình",
+                Filter = "Ảnh JPEG (*.jpg)|*.jpg",
+                FileName = SnapshotViewerViewModel.BuildExportFileName(target)
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                await File.WriteAllBytesAsync(dialog.FileName, bytes);
+                StatusBanner = $"Đã lưu ảnh: {dialog.FileName}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusBanner = $"Không thể lưu ảnh: {ex.Message}";
         }
     }
 
@@ -622,6 +896,170 @@ public sealed partial class ExecutiveDashboardViewModel : ObservableObject
 
         StatusBanner = $"Đã đặt MaxApprovedVersion={FleetMaxApprovedVersion} ({FleetAllowedChannel}): Đẩy ngay {pushed}, Chờ (Queue) {queued}.";
         await RefreshAllAsync();
+    }
+
+    [RelayCommand]
+    public async Task RefreshApprovalHubAsync()
+    {
+        IReadOnlyList<LeaveRequestEntity> leaves = await _leaveService.GetRequestsAsync(pendingOnly: true, mineOnly: false);
+        IReadOnlyList<ExpenseRequestEntity> expenses = await _ledgerService.GetExpenseRequestsAsync(pendingOnly: true, mineOnly: false);
+
+        Guid? prevLeaveId = SelectedPendingLeave?.Id;
+        PendingLeaveRequests.Clear();
+        foreach (LeaveRequestEntity item in leaves)
+        {
+            PendingLeaveRequests.Add(item);
+        }
+
+        SelectedPendingLeave = PendingLeaveRequests.FirstOrDefault(x => x.Id == prevLeaveId) ?? PendingLeaveRequests.FirstOrDefault();
+
+        Guid? prevExpId = SelectedPendingExpense?.Id;
+        PendingExpenseRequests.Clear();
+        foreach (ExpenseRequestEntity item in expenses)
+        {
+            PendingExpenseRequests.Add(item);
+        }
+
+        SelectedPendingExpense = PendingExpenseRequests.FirstOrDefault(x => x.Id == prevExpId) ?? PendingExpenseRequests.FirstOrDefault();
+
+        PendingLeaveCount = PendingLeaveRequests.Count;
+        PendingExpenseCount = PendingExpenseRequests.Count;
+        int total = PendingLeaveCount + PendingExpenseCount;
+        ApprovalHubSummaryText = total == 0
+            ? "Tất cả đơn nghỉ phép / tăng ca và đề xuất chi phí đã được xử lý."
+            : $"Đang chờ Giám đốc duyệt: {PendingLeaveCount} đơn nghỉ phép/OT • {PendingExpenseCount} đề xuất chi phí.";
+    }
+
+    private async Task RefreshVisualChartsAsync(AppDbContext appDb)
+    {
+        List<WorkTaskEntity> tasks = await appDb.WorkTasks
+            .AsNoTracking()
+            .Where(t => !string.IsNullOrWhiteSpace(t.AssigneeFullName))
+            .ToListAsync();
+
+        EmployeeTaskCharts.Clear();
+        foreach (var g in tasks
+                     .GroupBy(t => t.AssigneeFullName)
+                     .OrderByDescending(g => g.Count(x => x.Status == WorkTaskStatuses.Completed))
+                     .Take(8))
+        {
+            int total = g.Count();
+            int completed = g.Count(x => x.Status == WorkTaskStatuses.Completed);
+            double barW = total == 0 ? 4.0 : Math.Max(8.0, (double)completed / total * 220.0);
+            int pct = total == 0 ? 0 : (int)Math.Round(completed * 100.0 / total);
+            EmployeeTaskCharts.Add(new EmployeeTaskChartRow(
+                g.Key,
+                completed,
+                total,
+                $"{completed}/{total} việc ({pct}%)",
+                barW));
+        }
+
+        string monthPrefix = $"{DateTime.Now:yyyy-MM}-";
+        List<AttendanceRecordEntity> monthRecords = await appDb.AttendanceRecords
+            .AsNoTracking()
+            .Where(r => !r.IsDeleted && r.DateKey.StartsWith(monthPrefix))
+            .ToListAsync();
+
+        var attendanceAgg = monthRecords
+            .GroupBy(r => string.IsNullOrWhiteSpace(r.EmployeeName) ? r.EmployeeCode : r.EmployeeName)
+            .Select(g => new
+            {
+                Name = g.Key,
+                Hours = Math.Round(g.Sum(x => x.WorkedHours), 1),
+                LateDays = g.Count(x => x.Status == "Late")
+            })
+            .OrderByDescending(x => x.Hours)
+            .Take(8)
+            .ToList();
+
+        double maxHours = attendanceAgg.Count > 0 ? Math.Max(1.0, attendanceAgg.Max(x => x.Hours)) : 1.0;
+        EmployeeAttendanceCharts.Clear();
+        foreach (var item in attendanceAgg)
+        {
+            double barW = Math.Max(8.0, item.Hours / maxHours * 220.0);
+            EmployeeAttendanceCharts.Add(new EmployeeAttendanceChartRow(
+                item.Name,
+                item.Hours,
+                item.LateDays,
+                $"{item.Hours:F1}h • {item.LateDays} muộn",
+                barW));
+        }
+    }
+
+    [RelayCommand]
+    private async Task ApproveSelectedLeaveAsync() => await DecideSelectedLeaveAsync(true);
+
+    [RelayCommand]
+    private async Task RejectSelectedLeaveAsync() => await DecideSelectedLeaveAsync(false);
+
+    private async Task DecideSelectedLeaveAsync(bool approve)
+    {
+        if (SelectedPendingLeave is null)
+        {
+            StatusBanner = "Vui lòng chọn đơn nghỉ phép / tăng ca cần xử lý.";
+            return;
+        }
+
+        LeaveRequestEntity decided = await _leaveService.DecideRequestAsync(SelectedPendingLeave.Id, approve, ApprovalReviewNotes);
+        ApprovalReviewNotes = string.Empty;
+        _ = await _collabClient.SyncAllEnterpriseEntitiesWithOnlinePeersAsync();
+        StatusBanner = $"Đã {(approve ? "DUYỆT" : "TỪ CHỐI")} đơn {decided.RequestType} của {decided.EmployeeName}.";
+        await RefreshAllAsync();
+    }
+
+    [RelayCommand]
+    private async Task ApproveSelectedExpenseAsync() => await DecideSelectedExpenseAsync(true);
+
+    [RelayCommand]
+    private async Task RejectSelectedExpenseAsync() => await DecideSelectedExpenseAsync(false);
+
+    private async Task DecideSelectedExpenseAsync(bool approve)
+    {
+        if (SelectedPendingExpense is null)
+        {
+            StatusBanner = "Vui lòng chọn đề xuất chi phí cần xử lý.";
+            return;
+        }
+
+        ExpenseRequestEntity decided = await _ledgerService.DecideExpenseRequestAsync(SelectedPendingExpense.Id, approve, ApprovalReviewNotes);
+        ApprovalReviewNotes = string.Empty;
+        _ = await _collabClient.SyncAllEnterpriseEntitiesWithOnlinePeersAsync();
+        StatusBanner = $"Đã {(approve ? "DUYỆT" : "TỪ CHỐI")} đề xuất chi phí {decided.AmountVnd:N0}đ của {decided.RequesterFullName}.";
+        await RefreshAllAsync();
+    }
+
+    [RelayCommand]
+    private void SaveAutoBackupConfig()
+    {
+        DirectorAutoBackupConfig saved = _autoBackup.SaveConfig(
+            AutoBackupEnabled,
+            AutoBackupIntervalHours,
+            AutoBackupRetentionCount);
+        AutoBackupEnabled = saved.Enabled;
+        AutoBackupIntervalHours = saved.IntervalHours;
+        AutoBackupRetentionCount = saved.RetentionCountPerDevice;
+        AutoBackupLastSummary = saved.LastRunSummary;
+        StatusBanner = saved.Enabled
+            ? $"Đã bật Auto-Backup mỗi {saved.IntervalHours}h (giữ {saved.RetentionCountPerDevice} bản/máy)."
+            : "Đã lưu cấu hình Auto-Backup (đang tắt).";
+    }
+
+    [RelayCommand]
+    private async Task RunAutoBackupNowAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            string summary = await _autoBackup.RunBackupAllOnlineNowAsync();
+            AutoBackupLastSummary = summary;
+            StatusBanner = summary;
+            await RefreshAllAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     private bool TryGetSelectedOnlineEndpoint(out string endpoint)

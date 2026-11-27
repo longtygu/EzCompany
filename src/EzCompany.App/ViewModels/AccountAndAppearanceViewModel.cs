@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,6 +26,8 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     private readonly LanCollaborationClient _collabClient;
     private readonly AppearanceSettingsService _appearance;
     private readonly AppDiagnosticsAndRepairService _diagnostics;
+    private readonly UserAvatarService _avatars;
+    private readonly WindowsStartupService? _startup;
     private readonly ISessionContext _session;
     private readonly IPermissionService _permissions;
     private readonly ILocalStoragePaths _paths;
@@ -38,11 +42,13 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
         LanCollaborationClient collabClient,
         AppearanceSettingsService appearance,
         AppDiagnosticsAndRepairService diagnostics,
+        UserAvatarService avatars,
         UpdatesSettingsViewModel updatesVm,
         ISessionContext session,
         IPermissionService permissions,
         ILocalStoragePaths paths,
-        RollingFileLoggerProvider? fileLogger = null)
+        RollingFileLoggerProvider? fileLogger = null,
+        WindowsStartupService? startup = null)
     {
         _bootstrap = bootstrap;
         _branding = branding;
@@ -50,6 +56,8 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
         _collabClient = collabClient;
         _appearance = appearance;
         _diagnostics = diagnostics;
+        _avatars = avatars;
+        _startup = startup;
         UpdatesVm = updatesVm;
         _session = session;
         _permissions = permissions;
@@ -89,18 +97,24 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
     [ObservableProperty] private double _cardOpacity = 1.0;
     [ObservableProperty] private int _cardTransparencyPercent;
     [ObservableProperty] private double _cardTintStrength = 0.08;
+    [ObservableProperty] private bool _minimizeToTrayOnClose = true;
+    [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private string _appearanceStatusMessage = string.Empty;
 
     public int WindowOpacityPercent => 100 - WindowTransparencyPercent;
     private bool _syncingPercent;
 
-    // Tab 2: Account & Company Logo
+    // Tab 2: Account, Avatar & Company Logo
     [ObservableProperty] private string _fullName = string.Empty;
     [ObservableProperty] private string _username = string.Empty;
     [ObservableProperty] private string _roleDisplay = string.Empty;
     [ObservableProperty] private string _machineIdDisplay = string.Empty;
     [ObservableProperty] private bool _isDirectorNode;
     [ObservableProperty] private BitmapImage? _companyLogoPreview;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPersonalAvatar))]
+    private BitmapImage? _personalAvatarPreview;
+    public bool HasPersonalAvatar => PersonalAvatarPreview is not null;
     [ObservableProperty] private string _accountStatusMessage = string.Empty;
     [ObservableProperty] private string _policySummary = string.Empty;
     [ObservableProperty] private string _storageSummary = string.Empty;
@@ -134,6 +148,9 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
 
         byte[]? logoBytes = await _branding.GetCompanyLogoBytesAsync();
         CompanyLogoPreview = CompanyLogoImageHelper.LoadFromBytesOrDefault(logoBytes);
+
+        byte[]? avatarBytes = await _avatars.GetMyAvatarBytesAsync();
+        PersonalAvatarPreview = avatarBytes is { Length: > 0 } ? LoadBitmapFrozen(avatarBytes) : null;
 
         await ReloadLogsAsync();
     }
@@ -211,6 +228,21 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
 
     partial void OnBackdropTypeChanged(string value) => PushAppearanceChange();
     partial void OnCardTintStrengthChanged(double value) => PushAppearanceChange();
+    partial void OnMinimizeToTrayOnCloseChanged(bool value) => PushAppearanceChange();
+    partial void OnStartWithWindowsChanged(bool value)
+    {
+        if (!_suppressLiveApply && _startup is not null)
+        {
+            (bool ok, string msg) = _startup.SetEnabled(value);
+            if (!ok)
+            {
+                AppearanceStatusMessage = msg;
+            }
+        }
+
+        PushAppearanceChange();
+    }
+
     partial void OnSelectedLogLevelChanged(string value) => _ = ReloadLogsAsync();
 
     public async Task ChangeCredentialsAsync(string currentPassword, string newPassword, string confirmNewPassword)
@@ -295,6 +327,77 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
             _ = await _collabClient.PushCompanyBrandingToOnlinePeersAsync();
         }
         AccountStatusMessage = "Đã khôi phục Logo mặc định của Ez Company.";
+    }
+
+    [RelayCommand]
+    private async Task UploadPersonalAvatarAsync()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Chọn Ảnh đại diện cá nhân (PNG / JPG)",
+            Filter = "Hình ảnh (*.png;*.jpg;*.jpeg;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.webp;*.bmp"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            byte[] encoded = ResizeImageToPngBytes(dialog.FileName, 256);
+            await _avatars.SaveMyAvatarAsync(encoded);
+            PersonalAvatarPreview = LoadBitmapFrozen(encoded);
+            _ = await _collabClient.SyncAllEnterpriseEntitiesWithOnlinePeersAsync();
+            AccountStatusMessage = "Đã cập nhật ảnh đại diện cá nhân và đồng bộ tới các máy LAN.";
+        }
+        catch (Exception ex)
+        {
+            AccountStatusMessage = $"Lỗi cập nhật ảnh đại diện: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task RemovePersonalAvatarAsync()
+    {
+        await _avatars.ClearMyAvatarAsync();
+        PersonalAvatarPreview = null;
+        _ = await _collabClient.SyncAllEnterpriseEntitiesWithOnlinePeersAsync();
+        AccountStatusMessage = "Đã xóa ảnh đại diện cá nhân.";
+    }
+
+    private static byte[] ResizeImageToPngBytes(string filePath, int maxDimension)
+    {
+        var src = new BitmapImage();
+        src.BeginInit();
+        src.CacheOption = BitmapCacheOption.OnLoad;
+        src.UriSource = new Uri(filePath, UriKind.Absolute);
+        src.EndInit();
+
+        BitmapSource processed = src;
+        if (src.PixelWidth > maxDimension || src.PixelHeight > maxDimension)
+        {
+            double scale = Math.Min((double)maxDimension / src.PixelWidth, (double)maxDimension / src.PixelHeight);
+            processed = new TransformedBitmap(src, new ScaleTransform(scale, scale));
+        }
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(processed));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
+    }
+
+    private static BitmapImage LoadBitmapFrozen(byte[] bytes)
+    {
+        using var ms = new MemoryStream(bytes);
+        var bmp = new BitmapImage();
+        bmp.BeginInit();
+        bmp.CacheOption = BitmapCacheOption.OnLoad;
+        bmp.StreamSource = ms;
+        bmp.EndInit();
+        bmp.Freeze();
+        return bmp;
     }
 
     [RelayCommand]
@@ -421,6 +524,8 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
             CardOpacity = s.CardOpacity;
             CardTransparencyPercent = Math.Clamp((int)Math.Round((1.0 - s.CardOpacity) * 100.0), 0, 60);
             CardTintStrength = s.CardTintStrength;
+            MinimizeToTrayOnClose = s.MinimizeToTrayOnClose;
+            StartWithWindows = (_startup?.IsEnabled() ?? false) || s.StartWithWindows;
         }
         finally
         {
@@ -448,7 +553,9 @@ public sealed partial class AccountAndAppearanceViewModel : ObservableObject
             WindowOpacity = WindowOpacity,
             BackdropType = BackdropType,
             CardOpacity = CardOpacity,
-            CardTintStrength = CardTintStrength
+            CardTintStrength = CardTintStrength,
+            MinimizeToTrayOnClose = MinimizeToTrayOnClose,
+            StartWithWindows = StartWithWindows
         });
 
         AccentColorHex = applied.AccentColorHex;

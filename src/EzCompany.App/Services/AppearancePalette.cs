@@ -12,13 +12,17 @@ public sealed record AppearancePalette(
 
 public static class AppearancePaletteBuilder
 {
+    public static bool IsSolid(AppearanceSettings s) => s.WindowOpacity >= 0.995;
+
     public static AppearancePalette Build(AppearanceSettings s)
     {
         ArgumentNullException.ThrowIfNull(s);
 
         bool dark = s.IsDarkMode;
-        bool material = !string.Equals(s.BackdropType, "None", StringComparison.OrdinalIgnoreCase);
+        bool solid = IsSolid(s);
+        bool material = !solid && !string.Equals(s.BackdropType, "None", StringComparison.OrdinalIgnoreCase);
         double o = Math.Clamp(s.WindowOpacity, 0.0, 1.0);
+        double t = 1.0 - o;
         double cardOpacity = Math.Clamp(s.CardOpacity, 0.0, 1.0);
         double tint = Math.Clamp(s.CardTintStrength, 0.0, 1.0);
         Color accent = ParseColor(s.AccentColorHex);
@@ -28,8 +32,8 @@ public static class AppearancePaletteBuilder
         Color baseCard = dark ? Color.FromRgb(0x2A, 0x2D, 0x35) : Color.FromRgb(0xFF, 0xFF, 0xFF);
         Color baseInner = dark ? Color.FromRgb(0x33, 0x37, 0x3F) : Color.FromRgb(0xF2, 0xF4, 0xF8);
 
-        double surfaceAlpha = material ? o * 0.45 : o;
-        double panelAlpha = material ? o * 0.45 : o * 0.5;
+        double surfaceAlpha = solid ? 1.0 : material ? Math.Clamp(1.0 - (t / 0.70) * 0.85, 0.15, 1.0) : o;
+        double panelAlpha = solid ? 1.0 : material ? surfaceAlpha : o * 0.5;
 
         Color windowSurface = WithAlpha(Mix(baseSurface, accent, 0.04), surfaceAlpha);
         Color panel = WithAlpha(Mix(basePanel, accent, tint * 0.5), panelAlpha);

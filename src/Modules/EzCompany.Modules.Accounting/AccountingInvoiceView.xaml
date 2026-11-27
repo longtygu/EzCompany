@@ -5,45 +5,224 @@
     <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,12">
+        <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel>
-                <TextBlock Text="Kế toán — Kiểm tra Hóa đơn Điện tử XML (NĐ 123 &amp; NĐ 70/2025)" FontSize="20" FontWeight="Bold" />
-                <TextBlock Text="{Binding StatusMessage}" Opacity="0.8" Margin="0,4,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="Kế toán — Hóa đơn XML, Sổ Thu Chi &amp; Tạm ứng nội bộ" FontSize="20" FontWeight="Bold" />
+                <TextBlock Text="{Binding StatusMessage}" Opacity="0.82" Margin="0,4,0,0" TextWrapping="Wrap" />
             </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <ui:Button Appearance="Primary" Content="Quét tệp XML..." Command="{Binding ImportXmlFilesCommand}" Margin="0,0,8,0" />
-                <ui:Button Content="Xuất Excel (.xlsx)" Command="{Binding ExportExcelCommand}" Margin="0,0,8,0" />
-                <ui:Button Content="Làm mới" Command="{Binding LoadSavedCommand}" />
-            </StackPanel>
+            <ui:Button Grid.Column="1" Content="Làm mới dữ liệu" Command="{Binding LoadSavedCommand}" />
         </Grid>
 
-        <Border Grid.Row="1" Padding="10" Margin="0,0,0,10" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
-            <TextBlock Text="{Binding SummaryText}" FontWeight="SemiBold" TextWrapping="Wrap" />
-        </Border>
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: E-Invoice XML Checker -->
+            <TabItem Header="1. Hóa đơn Điện tử XML">
+                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-        <DataGrid Grid.Row="2" ItemsSource="{Binding Invoices}" AutoGenerateColumns="False" IsReadOnly="True">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Ký hiệu" Binding="{Binding InvoiceSeries}" Width="90" />
-                <DataGridTextColumn Header="Số HĐ" Binding="{Binding InvoiceNumber}" Width="80" />
-                <DataGridTextColumn Header="MST Bán" Binding="{Binding SellerTaxCode}" Width="110" />
-                <DataGridTextColumn Header="Tên Người bán" Binding="{Binding SellerName}" Width="180" />
-                <DataGridTextColumn Header="MST/CCCD Mua" Binding="{Binding BuyerTaxCodeOrCccd}" Width="120" />
-                <DataGridTextColumn Header="Tổng tiền" Binding="{Binding TotalAmount, StringFormat=N0}" Width="115" />
-                <DataGridCheckBoxColumn Header="Trùng" Binding="{Binding IsDuplicate}" Width="60" />
-                <DataGridCheckBoxColumn Header="Lệch >10đ" Binding="{Binding HasMathMismatch}" Width="75" />
-                <DataGridTextColumn Header="Ghi chú &amp; Cảnh báo" Binding="{Binding ValidationNotes}" Width="*" />
-            </DataGrid.Columns>
-        </DataGrid>
+                    <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                        <ui:TextBox Text="{Binding InvoiceSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="Tìm tên, MST bán, số HĐ..."
+                                    Width="230"
+                                    Margin="0,0,8,4" />
+                        <TextBlock Text="Tháng:" VerticalAlignment="Center" Margin="0,0,4,4" />
+                        <ui:TextBox Text="{Binding InvoiceFilterMonth, UpdateSourceTrigger=PropertyChanged}" Width="55" Margin="0,0,8,4" ToolTip="0 = tất cả" />
+                        <TextBlock Text="Năm:" VerticalAlignment="Center" Margin="0,0,4,4" />
+                        <ui:TextBox Text="{Binding InvoiceFilterYear, UpdateSourceTrigger=PropertyChanged}" Width="70" Margin="0,0,10,4" ToolTip="0 = tất cả" />
+                        <CheckBox Content="Chỉ hiện cảnh báo" IsChecked="{Binding InvoiceAlertsOnly}" VerticalAlignment="Center" Margin="0,0,10,4" />
+                        <ui:Button Content="Bỏ lọc" Command="{Binding ClearInvoiceFiltersCommand}" Margin="0,0,12,4" />
+                        <ui:Button Appearance="Primary" Content="Quét tệp XML..." Command="{Binding ImportXmlFilesCommand}" Margin="0,0,8,4" />
+                        <ui:Button Content="Xuất Excel (.xlsx)" Command="{Binding ExportExcelCommand}" Margin="0,0,8,4" />
+                        <ui:Button Content="Xóa HĐ đang chọn" Command="{Binding DeleteSelectedInvoiceCommand}" Margin="0,0,0,4" />
+                    </WrapPanel>
 
-        <TextBlock Grid.Row="3" Text="Tệp XML gốc được lưu nguyên vẹn vào Vault/Accounting/Invoices/." FontSize="12" Opacity="0.65" Margin="0,8,0,0" />
+                    <Border Grid.Row="1" Padding="10" Margin="0,0,0,10" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                        <TextBlock Text="{Binding SummaryText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Border>
+
+                    <DataGrid Grid.Row="2"
+                              ItemsSource="{Binding Invoices}"
+                              SelectedItem="{Binding SelectedInvoice}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Ký hiệu" Binding="{Binding InvoiceSeries}" Width="85" />
+                            <DataGridTextColumn Header="Số HĐ" Binding="{Binding InvoiceNumber}" Width="80" />
+                            <DataGridTextColumn Header="Ngày HĐ" Binding="{Binding IssueDate, StringFormat=dd/MM/yyyy}" Width="90" />
+                            <DataGridTextColumn Header="MST Bán" Binding="{Binding SellerTaxCode}" Width="110" />
+                            <DataGridTextColumn Header="Tên Người bán" Binding="{Binding SellerName}" Width="170" />
+                            <DataGridTextColumn Header="Tổng tiền" Binding="{Binding TotalAmount, StringFormat=N0}" Width="115" />
+                            <DataGridCheckBoxColumn Header="Trùng" Binding="{Binding IsDuplicate}" Width="58" />
+                            <DataGridCheckBoxColumn Header="Lệch &gt;10đ" Binding="{Binding HasMathMismatch}" Width="75" />
+                            <DataGridTextColumn Header="Ghi chú &amp; Cảnh báo" Binding="{Binding ValidationNotes}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <TextBlock Grid.Row="3" Text="Tệp XML gốc được lưu nguyên vẹn vào Vault/Accounting/Invoices/." FontSize="12" Opacity="0.65" Margin="0,8,0,0" />
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: Cashbook Income / Expense Ledger -->
+            <TabItem Header="2. Sổ Thu – Chi &amp; Quỹ nội bộ">
+                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Summary KPI -->
+                    <UniformGrid Grid.Row="0" Columns="3" Margin="0,0,0,10">
+                        <Border Padding="12" Margin="0,0,6,0" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Tổng Thu" Opacity="0.72" FontSize="12" />
+                                <TextBlock Text="{Binding CashbookSummaryIncome}" FontSize="20" FontWeight="Bold" Foreground="#22C55E" />
+                            </StackPanel>
+                        </Border>
+                        <Border Padding="12" Margin="3,0" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Tổng Chi" Opacity="0.72" FontSize="12" />
+                                <TextBlock Text="{Binding CashbookSummaryExpense}" FontSize="20" FontWeight="Bold" Foreground="#EF4444" />
+                            </StackPanel>
+                        </Border>
+                        <Border Padding="12" Margin="6,0,0,0" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Tồn Quỹ hiện tại" Opacity="0.72" FontSize="12" />
+                                <TextBlock Text="{Binding CashbookSummaryBalance}" FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+
+                    <!-- Entry Form -->
+                    <Border Grid.Row="1" Padding="12" Margin="0,0,0,10" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                        <StackPanel>
+                            <TextBlock Text="Ghi sổ Thu / Chi mới" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="105" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="120" />
+                                </Grid.ColumnDefinitions>
+                                <DatePicker Grid.Column="0" SelectedDate="{Binding NewEntryDate}" />
+                                <ComboBox Grid.Column="2" ItemsSource="{Binding CashbookTypes}" SelectedItem="{Binding NewEntryType}" />
+                                <ui:TextBox Grid.Column="4" Text="{Binding NewEntryCategory, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Danh mục..." />
+                                <ui:TextBox Grid.Column="6" Text="{Binding NewEntryAmountText, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Số tiền VNĐ..." />
+                                <ComboBox Grid.Column="8" ItemsSource="{Binding PaymentMethods}" SelectedItem="{Binding NewEntryMethod}" />
+                                <ui:TextBox Grid.Column="10" Text="{Binding NewEntryRefCode, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Số chứng từ..." />
+                            </Grid>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="105" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBox Grid.Column="0" Text="{Binding NewEntryDescription, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Diễn giải chi tiết khoản thu/chi..." />
+                                <ui:Button Grid.Column="2" Appearance="Primary" Content="Ghi Sổ Quỹ" Command="{Binding AddCashbookEntryCommand}" />
+                                <ComboBox Grid.Column="4" ItemsSource="{Binding CashbookTypeFilters}" SelectedItem="{Binding CashbookTypeFilter}" />
+                                <ui:Button Grid.Column="6" Content="Xóa dòng" Command="{Binding DeleteSelectedCashbookEntryCommand}" />
+                                <ui:Button Grid.Column="8" Content="Xuất Sổ Quỹ Excel" Command="{Binding ExportCashbookExcelCommand}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid Grid.Row="2"
+                              ItemsSource="{Binding CashbookEntries}"
+                              SelectedItem="{Binding SelectedCashbookEntry}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Ngày" Binding="{Binding EntryDateKey}" Width="95" />
+                            <DataGridTextColumn Header="Loại" Binding="{Binding EntryType}" Width="80" />
+                            <DataGridTextColumn Header="Danh mục" Binding="{Binding Category}" Width="140" />
+                            <DataGridTextColumn Header="Số tiền" Binding="{Binding AmountVnd, StringFormat=N0}" Width="120" />
+                            <DataGridTextColumn Header="Hình thức" Binding="{Binding PaymentMethod}" Width="105" />
+                            <DataGridTextColumn Header="Chứng từ" Binding="{Binding ReferenceCode}" Width="105" />
+                            <DataGridTextColumn Header="Diễn giải" Binding="{Binding Description}" Width="*" />
+                            <DataGridTextColumn Header="Người lập" Binding="{Binding CreatedByName}" Width="130" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: Advance / Expense Requests & Disbursement -->
+            <TabItem Header="3. Tạm ứng &amp; Thanh toán nội bộ">
+                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Padding="12" Margin="0,0,0,10" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                        <StackPanel>
+                            <TextBlock Text="Tạo Đề xuất Tạm ứng / Hoàn ứng / Thanh toán" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="135" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0" ItemsSource="{Binding ExpenseRequestTypeOptions}" SelectedItem="{Binding NewExpenseType}" />
+                                <ui:TextBox Grid.Column="2" Text="{Binding NewExpenseCategory, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Hạng mục chi..." />
+                                <ui:TextBox Grid.Column="4" Text="{Binding NewExpenseAmountText, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Số tiền VNĐ..." />
+                                <ui:TextBox Grid.Column="6" Text="{Binding NewExpenseDescription, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Lý do tạm ứng / nội dung thanh toán..." />
+                            </Grid>
+                            <WrapPanel Margin="0,8,0,0">
+                                <ui:TextBox Text="{Binding NewExpenseReceiptPath}" IsReadOnly="True" PlaceholderText="Chứng từ đính kèm..." Width="240" Margin="0,0,6,0" />
+                                <ui:Button Content="Chọn chứng từ..." Command="{Binding BrowseExpenseReceiptCommand}" Margin="0,0,8,0" />
+                                <ui:Button Appearance="Primary" Content="Gửi Đề xuất" Command="{Binding SubmitExpenseRequestCommand}" Margin="0,0,16,0" />
+                                <ComboBox ItemsSource="{Binding PaymentMethods}" SelectedItem="{Binding DisbursePaymentMethod}" Width="125" Margin="0,0,6,0" />
+                                <ui:Button Appearance="Primary" Content="Chi tiền &amp; Ghi Sổ Quỹ (Đề xuất đã duyệt)" Command="{Binding DisburseSelectedExpenseCommand}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding ExpenseRequests}"
+                              SelectedItem="{Binding SelectedExpenseRequest}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Người đề xuất" Binding="{Binding RequesterFullName}" Width="150" />
+                            <DataGridTextColumn Header="Loại" Binding="{Binding RequestType}" Width="105" />
+                            <DataGridTextColumn Header="Hạng mục" Binding="{Binding Category}" Width="130" />
+                            <DataGridTextColumn Header="Số tiền" Binding="{Binding AmountVnd, StringFormat=N0}" Width="115" />
+                            <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="95" />
+                            <DataGridTextColumn Header="Người duyệt" Binding="{Binding ApprovedByName}" Width="125" />
+                            <DataGridTextColumn Header="Nội dung" Binding="{Binding Description}" Width="*" />
+                            <DataGridTextColumn Header="Ghi chú duyệt" Binding="{Binding ReviewNotes}" Width="140" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+        </TabControl>
     </Grid>
 </UserControl>

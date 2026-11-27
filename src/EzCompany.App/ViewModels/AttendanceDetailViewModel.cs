@@ -6,6 +6,7 @@ using EzCompany.App.Services;
 using EzCompany.Core.Abstractions;
 using EzCompany.Core.Data;
 using EzCompany.Core.Data.Entities;
+using EzCompany.Core.LanAgent.Collaboration;
 using Microsoft.Win32;
 
 namespace EzCompany.App.ViewModels;
@@ -33,16 +34,20 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
 {
     private readonly HrAttendanceService _hrService;
     private readonly AttendanceExcelExporter _excelExporter;
+    private readonly LanCollaborationClient _collabClient;
     private readonly ISessionContext _session;
     private bool _suppressAutoReload;
+    private bool _suppressEditorAutoLoad;
 
     public AttendanceDetailViewModel(
         HrAttendanceService hrService,
         AttendanceExcelExporter excelExporter,
+        LanCollaborationClient collabClient,
         ISessionContext session)
     {
         _hrService = hrService;
         _excelExporter = excelExporter;
+        _collabClient = collabClient;
         _session = session;
 
         _suppressAutoReload = true;
@@ -75,6 +80,14 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
     [ObservableProperty] private double _editWorkDayUnits = 1.0;
     [ObservableProperty] private double _editOvertimeHours;
     [ObservableProperty] private string _editNotes = string.Empty;
+    [ObservableProperty] private string _editorHeaderText = "Bấm một ô ngày trong Bảng ma trận hoặc một dòng nhật ký để sửa chấm công.";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveButtonText))]
+    private bool _editingExistingRecord;
+
+    public string SaveButtonText => EditingExistingRecord ? "Cập nhật chấm công ngày này" : "Lưu chấm công mới";
+    public Func<string, string, bool>? ConfirmCallback { get; set; }
 
     public event EventHandler? DataModified;
 
@@ -103,6 +116,22 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
         };
     }
 
+    partial void OnEditEmployeeChanged(EmployeeProfileEntity? value)
+    {
+        if (!_suppressEditorAutoLoad && !_suppressAutoReload)
+        {
+            _ = LoadEditorForCurrentSelectionAsync();
+        }
+    }
+
+    partial void OnEditWorkDateChanged(DateTime value)
+    {
+        if (!_suppressEditorAutoLoad && !_suppressAutoReload)
+        {
+            _ = LoadEditorForCurrentSelectionAsync();
+        }
+    }
+
     partial void OnSelectedRecordChanged(AttendanceLogDisplayRow? value)
     {
         if (value is null)
@@ -110,11 +139,85 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
             return;
         }
 
-        AttendanceRecordEntity e = value.Entity;
-        EditEmployee = Employees.FirstOrDefault(x => x.Id == e.EmployeeProfileId);
-        if (DateOnly.TryParse(e.DateKey, out DateOnly d))
+        ApplyRecordToEditor(value.Entity);
+    }
+
+    public async Task SelectMatrixCellAsync(string employeeCode, int day)
+    {
+        EmployeeProfileEntity? emp = Employees.FirstOrDefault(e =>
+            string.Equals(e.EmployeeCode, employeeCode, StringComparison.OrdinalIgnoreCase));
+        if (emp is null)
         {
-            EditWorkDate = d.ToDateTime(TimeOnly.MinValue);
+            return;
+        }
+
+        int year = Math.Clamp(SelectedYear, 2000, 2100);
+        int month = Math.Clamp(SelectedMonth, 1, 12);
+        int maxDay = DateTime.DaysInMonth(year, month);
+        if (day < 1 || day > maxDay)
+        {
+            return;
+        }
+
+        _suppressEditorAutoLoad = true;
+        try
+        {
+            EditEmployee = emp;
+            EditWorkDate = new DateTime(year, month, day);
+        }
+        finally
+        {
+            _suppressEditorAutoLoad = false;
+        }
+
+        await LoadEditorForCurrentSelectionAsync();
+    }
+
+    public async Task LoadEditorForCurrentSelectionAsync()
+    {
+        if (EditEmployee is null)
+        {
+            return;
+        }
+
+        DateOnly workDate = DateOnly.FromDateTime(EditWorkDate);
+        string dateKey = workDate.ToString("yyyy-MM-dd");
+        AttendanceRecordEntity? rec = DailyRecords
+            .Select(r => r.Entity)
+            .FirstOrDefault(r => r.EmployeeProfileId == EditEmployee.Id && r.DateKey == dateKey)
+            ?? await _hrService.GetAttendanceRecordForDayAsync(EditEmployee.Id, workDate);
+
+        if (rec is not null)
+        {
+            ApplyRecordToEditor(rec);
+        }
+        else
+        {
+            EditingExistingRecord = false;
+            EditCheckInText = "08:00";
+            EditCheckOutText = "17:30";
+            EditStatus = "Present";
+            EditWorkDayUnits = 1.0;
+            EditOvertimeHours = 0;
+            EditNotes = string.Empty;
+            EditorHeaderText = $"➕ Ngày {workDate:dd/MM/yyyy} — {EditEmployee.FullName}: CHƯA có chấm công → nhập giờ rồi bấm Lưu để tạo mới";
+        }
+    }
+
+    private void ApplyRecordToEditor(AttendanceRecordEntity e)
+    {
+        _suppressEditorAutoLoad = true;
+        try
+        {
+            EditEmployee = Employees.FirstOrDefault(x => x.Id == e.EmployeeProfileId) ?? EditEmployee;
+            if (DateOnly.TryParse(e.DateKey, out DateOnly d))
+            {
+                EditWorkDate = d.ToDateTime(TimeOnly.MinValue);
+            }
+        }
+        finally
+        {
+            _suppressEditorAutoLoad = false;
         }
 
         EditCheckInText = e.CheckInUtc?.ToLocalTime().ToString("HH:mm") ?? string.Empty;
@@ -123,6 +226,13 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
         EditWorkDayUnits = e.WorkDayUnits;
         EditOvertimeHours = e.OvertimeHours;
         EditNotes = e.Notes;
+        EditingExistingRecord = true;
+
+        string inTxt = string.IsNullOrEmpty(EditCheckInText) ? "—" : EditCheckInText;
+        string outTxt = string.IsNullOrEmpty(EditCheckOutText) ? "—" : EditCheckOutText;
+        string src = e.IsManualEntry ? "Thủ công HR" : "App Check-in";
+        string dateDisplay = DateOnly.TryParse(e.DateKey, out DateOnly parsedDate) ? parsedDate.ToString("dd/MM/yyyy") : e.DateKey;
+        EditorHeaderText = $"✏ Đang sửa chấm công ĐÃ CÓ ngày {dateDisplay} — {e.EmployeeName} • Hiện tại: Vào {inTxt} • Ra {outTxt} • {e.WorkedHours:F2}h • {e.Status} • Nguồn: {src}";
     }
 
     [RelayCommand]
@@ -222,7 +332,7 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
                 }
                 else
                 {
-                    row[day.ToString("D2")] = string.Empty;
+                    row[day.ToString("D2")] = FormatNonWorkingDayHint(year, month, day);
                 }
             }
 
@@ -234,6 +344,25 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
         }
 
         DailyMatrixView = table.DefaultView;
+    }
+
+    private static string FormatNonWorkingDayHint(int year, int month, int day)
+    {
+        if ((month == 1 && day == 1) ||
+            (month == 4 && day == 30) ||
+            (month == 5 && day == 1) ||
+            (month == 9 && day == 2))
+        {
+            return "Lễ";
+        }
+
+        var date = new DateTime(year, month, day);
+        return date.DayOfWeek switch
+        {
+            DayOfWeek.Sunday => "CN",
+            DayOfWeek.Saturday => "T7",
+            _ => string.Empty
+        };
     }
 
     private static string FormatMatrixCell(AttendanceRecordEntity rec)
@@ -280,8 +409,54 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
             EditOvertimeHours,
             EditNotes);
 
+        if (!_session.IsDirectorNode)
+        {
+            _ = await _collabClient.PushAttendanceToDirectorsAsync(saved);
+        }
+
         StatusBanner = $"Đã cập nhật chấm công {saved.EmployeeCode} ngày {saved.DateKey} ({saved.WorkedHours:F2}h).";
         await RefreshAsync();
+        await LoadEditorForCurrentSelectionAsync();
+        DataModified?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private async Task DeleteEditedDayAsync()
+    {
+        if (EditEmployee is null)
+        {
+            StatusBanner = "Vui lòng chọn nhân viên.";
+            return;
+        }
+
+        DateOnly workDate = DateOnly.FromDateTime(EditWorkDate);
+        string dateKey = workDate.ToString("yyyy-MM-dd");
+        AttendanceRecordEntity? rec = DailyRecords
+            .Select(r => r.Entity)
+            .FirstOrDefault(r => r.EmployeeProfileId == EditEmployee.Id && r.DateKey == dateKey)
+            ?? await _hrService.GetAttendanceRecordForDayAsync(EditEmployee.Id, workDate);
+
+        if (rec is null)
+        {
+            StatusBanner = "Ngày này chưa có chấm công để xóa.";
+            return;
+        }
+
+        if (ConfirmCallback is not null &&
+            !ConfirmCallback($"Xóa chấm công ngày {workDate:dd/MM/yyyy} của {EditEmployee.FullName}?", "Xác nhận xóa chấm công"))
+        {
+            return;
+        }
+
+        AttendanceRecordEntity? deleted = await _hrService.DeleteAttendanceRecordAsync(rec.Id);
+        if (deleted is not null && !_session.IsDirectorNode)
+        {
+            _ = await _collabClient.PushAttendanceToDirectorsAsync(deleted);
+        }
+
+        StatusBanner = $"Đã xóa chấm công ngày {rec.DateKey} của {rec.EmployeeName}.";
+        await RefreshAsync();
+        await LoadEditorForCurrentSelectionAsync();
         DataModified?.Invoke(this, EventArgs.Empty);
     }
 
@@ -293,9 +468,15 @@ public sealed partial class AttendanceDetailViewModel : ObservableObject
             return;
         }
 
-        await _hrService.DeleteAttendanceRecordAsync(SelectedRecord.Id);
+        AttendanceRecordEntity? deleted = await _hrService.DeleteAttendanceRecordAsync(SelectedRecord.Id);
+        if (deleted is not null && !_session.IsDirectorNode)
+        {
+            _ = await _collabClient.PushAttendanceToDirectorsAsync(deleted);
+        }
+
         StatusBanner = $"Đã xóa dòng chấm công ngày {SelectedRecord.DateKey} của {SelectedRecord.EmployeeName}.";
         await RefreshAsync();
+        await LoadEditorForCurrentSelectionAsync();
         DataModified?.Invoke(this, EventArgs.Empty);
     }
 

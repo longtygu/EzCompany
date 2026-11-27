@@ -20,6 +20,7 @@ public sealed class AccountingModule : IAppModule
         services.AddSingleton<VietnameseInvoiceXmlParser>();
         services.AddSingleton<AccountingInvoiceService>();
         services.AddSingleton<AccountingExcelExporter>();
+        services.AddSingleton<AccountingLedgerExcelExporter>();
         services.AddTransient<AccountingInvoiceViewModel>();
         services.AddTransient<AccountingInvoiceView>();
     }

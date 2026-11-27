@@ -308,9 +308,26 @@ public sealed class HrAttendanceService
                 CheckInUtc = nowUtc,
                 Status = status,
                 Notes = status == "Late" ? $"Đi muộn ({localNow:HH:mm})" : $"Vào ca ({localNow:HH:mm})",
+                IsDeleted = false,
                 UpdatedAtUtc = nowUtc
             };
             db.AttendanceRecords.Add(rec);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await _audit.LogAsync("HR_CHECK_IN", "core.hr", rec.EmployeeCode, $"{dateKey} {localNow:HH:mm}", "Info", ct).ConfigureAwait(false);
+        }
+        else if (rec.IsDeleted)
+        {
+            string status = localNow.TimeOfDay > new TimeSpan(8, 30, 0) ? "Late" : "Present";
+            rec.IsDeleted = false;
+            rec.CheckInUtc = nowUtc;
+            rec.CheckOutUtc = null;
+            rec.WorkedHours = 0;
+            rec.WorkDayUnits = 1.0;
+            rec.OvertimeHours = 0;
+            rec.IsManualEntry = false;
+            rec.Status = status;
+            rec.Notes = status == "Late" ? $"Đi muộn ({localNow:HH:mm})" : $"Vào ca ({localNow:HH:mm})";
+            rec.UpdatedAtUtc = nowUtc;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await _audit.LogAsync("HR_CHECK_IN", "core.hr", rec.EmployeeCode, $"{dateKey} {localNow:HH:mm}", "Info", ct).ConfigureAwait(false);
         }
@@ -426,6 +443,7 @@ public sealed class HrAttendanceService
                 IsManualEntry = record.IsManualEntry,
                 Status = record.Status,
                 Notes = record.Notes,
+                IsDeleted = record.IsDeleted,
                 UpdatedAtUtc = record.UpdatedAtUtc
             };
             db.AttendanceRecords.Add(existing);
@@ -440,11 +458,25 @@ public sealed class HrAttendanceService
             existing.IsManualEntry = record.IsManualEntry;
             existing.Status = record.Status;
             existing.Notes = record.Notes;
+            existing.IsDeleted = record.IsDeleted;
             existing.UpdatedAtUtc = record.UpdatedAtUtc;
         }
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return existing;
+    }
+
+    public async Task<AttendanceRecordEntity?> GetAttendanceRecordForDayAsync(
+        Guid employeeProfileId,
+        DateOnly workDate,
+        CancellationToken ct = default)
+    {
+        string dateKey = workDate.ToString("yyyy-MM-dd");
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        return await db.AttendanceRecords
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.EmployeeProfileId == employeeProfileId && r.DateKey == dateKey && !r.IsDeleted, ct)
+            .ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<AttendanceRecordEntity>> GetAttendanceRecordsAsync(
@@ -456,7 +488,7 @@ public sealed class HrAttendanceService
         string prefix = $"{year:D4}-{month:D2}-";
         await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         IQueryable<AttendanceRecordEntity> query = db.AttendanceRecords.AsNoTracking()
-            .Where(r => r.DateKey.StartsWith(prefix));
+            .Where(r => r.DateKey.StartsWith(prefix) && !r.IsDeleted);
 
         if (employeeProfileId.HasValue)
         {
@@ -590,6 +622,7 @@ public sealed class HrAttendanceService
             rec.IsManualEntry = true;
             rec.Status = normalizedStatus;
             rec.Notes = notes?.Trim() ?? string.Empty;
+            rec.IsDeleted = false;
             rec.UpdatedAtUtc = now;
         }
 
@@ -605,18 +638,20 @@ public sealed class HrAttendanceService
         return rec;
     }
 
-    public async Task DeleteAttendanceRecordAsync(Guid recordId, CancellationToken ct = default)
+    public async Task<AttendanceRecordEntity?> DeleteAttendanceRecordAsync(Guid recordId, CancellationToken ct = default)
     {
         await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         AttendanceRecordEntity? rec = await db.AttendanceRecords.FirstOrDefaultAsync(r => r.Id == recordId, ct).ConfigureAwait(false);
         if (rec is null)
         {
-            return;
+            return null;
         }
 
-        db.AttendanceRecords.Remove(rec);
+        rec.IsDeleted = true;
+        rec.UpdatedAtUtc = _timeProvider.GetUtcNow();
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         await _audit.LogAsync("HR_ATTENDANCE_DELETED", "core.hr", rec.EmployeeCode, rec.DateKey, "Warning", ct).ConfigureAwait(false);
+        return rec;
     }
 
     public async Task<IReadOnlyList<MonthlyPayrollRow>> CalculateMonthlyPayrollAsync(

@@ -25,6 +25,8 @@ public sealed class LocalUserEntity
     public string PasswordHash { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public string? AvatarBase64 { get; set; }
+    public DateTimeOffset? AvatarUpdatedAtUtc { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset? LastLoginUtc { get; set; }
 }
@@ -50,6 +52,8 @@ public sealed class PairedDeviceEntity
     public long DbSizeBytes { get; set; }
     public long VaultSizeBytes { get; set; }
     public double FreeDiskPercent { get; set; }
+    public string? AvatarBase64 { get; set; }
+    public DateTimeOffset? AvatarUpdatedAtUtc { get; set; }
     public DateTimeOffset? LastSeenUtc { get; set; }
     public DateTimeOffset? LastBackupUtc { get; set; }
     public DateTimeOffset? LastTelemetrySyncUtc { get; set; }
@@ -165,6 +169,8 @@ public sealed class WorkTaskEntity
 
     public string? PendingSyncTargetMachineId { get; set; }
     public string? PendingSyncAction { get; set; }
+    public string SubtasksJson { get; set; } = "[]";
+    public string RecurrenceRule { get; set; } = "None"; // None | Daily | Weekly | Monthly
 }
 
 public sealed class WorkTaskHistoryEntity
@@ -231,6 +237,8 @@ public sealed class ChatMessageEntity
     public Guid? LinkedTaskId { get; set; }
     public DateTimeOffset SentAtUtc { get; set; }
     public string? PendingSyncTargetsJson { get; set; }
+    public Guid? ReplyToMessageId { get; set; }
+    public string? ReplyPreviewText { get; set; }
 }
 
 public sealed class TimelinePlanEntity
@@ -293,5 +301,104 @@ public sealed class AttendanceRecordEntity
     public bool IsManualEntry { get; set; } = false;
     public string Status { get; set; } = "Present"; // Present | Late | HalfDay | Leave | Absent
     public string Notes { get; set; } = string.Empty;
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
+public sealed class LeaveRequestEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid EmployeeProfileId { get; set; }
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string MachineId { get; set; } = string.Empty;
+    public string RequestType { get; set; } = "Leave"; // Leave | HalfDay | Late | Overtime
+    public string StartDateKey { get; set; } = string.Empty; // yyyy-MM-dd
+    public string EndDateKey { get; set; } = string.Empty; // yyyy-MM-dd
+    public double OvertimeHours { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending"; // Pending | Approved | Rejected
+    public string ReviewedByName { get; set; } = string.Empty;
+    public DateTimeOffset? ReviewedAtUtc { get; set; }
+    public string ReviewNotes { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
+public sealed class CashbookEntryEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string EntryDateKey { get; set; } = string.Empty; // yyyy-MM-dd
+    public string EntryType { get; set; } = "Expense"; // Income | Expense
+    public string Category { get; set; } = string.Empty;
+    public decimal AmountVnd { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string ReferenceCode { get; set; } = string.Empty;
+    public string PaymentMethod { get; set; } = "Cash"; // Cash | BankTransfer
+    public Guid? LinkedExpenseRequestId { get; set; }
+    public string CreatedByName { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
+public sealed class ExpenseRequestEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string RequesterMachineId { get; set; } = string.Empty;
+    public string RequesterUsername { get; set; } = string.Empty;
+    public string RequesterFullName { get; set; } = string.Empty;
+    public string RequestType { get; set; } = "Advance"; // Advance | Reimbursement | Payment
+    public string Category { get; set; } = string.Empty;
+    public decimal AmountVnd { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string? ReceiptFileName { get; set; }
+    public string? ReceiptVaultPath { get; set; }
+    public string Status { get; set; } = "Pending"; // Pending | Approved | Disbursed | Rejected
+    public string ApprovedByName { get; set; } = string.Empty;
+    public DateTimeOffset? ApprovedAtUtc { get; set; }
+    public string ReviewNotes { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
+public sealed class ContractRecordEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string ContractNumber { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string CounterpartyName { get; set; } = string.Empty;
+    public string ContractType { get; set; } = "Customer"; // Customer | Vendor | Labor | NDA | Lease | Other
+    public string SignedDateKey { get; set; } = string.Empty;
+    public string StartDateKey { get; set; } = string.Empty;
+    public string ExpiryDateKey { get; set; } = string.Empty;
+    public decimal ValueVnd { get; set; }
+    public string Status { get; set; } = "Active"; // Active | ExpiringSoon | Expired | Terminated
+    public string OwnerName { get; set; } = string.Empty;
+    public string? VaultFilePath { get; set; }
+    public string? FileName { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAtUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
+public sealed class SharedDocumentEntity
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Category { get; set; } = "General"; // Policy | Template | Notice | General
+    public string Description { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string? VaultRelativePath { get; set; }
+    public string FileSha256 { get; set; } = string.Empty;
+    public long FileSizeBytes { get; set; }
+    public string UploadedByMachineId { get; set; } = string.Empty;
+    public string UploadedByName { get; set; } = string.Empty;
+    public DateTimeOffset UploadedAtUtc { get; set; }
+    public bool IsDeleted { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }

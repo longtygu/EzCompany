@@ -25,6 +25,8 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="12" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Filter & Export Toolbar -->
@@ -67,7 +69,7 @@
                 </Grid>
             </Border>
 
-            <!-- Tabs: Full Day Matrix + Log Editor -->
+            <!-- Tabs: Full Day Matrix + Log List -->
             <TabControl Grid.Row="1">
                 <TabItem Header="1. Bảng Ma trận Chấm công Full theo Ngày (Ngày 1 → Cuối tháng)">
                     <Border Margin="0,10,0,0"
@@ -76,128 +78,136 @@
                             Background="{DynamicResource AppCardBackgroundBrush}"
                             BorderThickness="1"
                             BorderBrush="{DynamicResource AppCardBorderBrush}">
-                        <DataGrid ItemsSource="{Binding DailyMatrixView}"
-                                  AutoGenerateColumns="True"
-                                  IsReadOnly="True"
-                                  CanUserAddRows="False"
-                                  FrozenColumnCount="2"
-                                  HorizontalScrollBarVisibility="Auto"
-                                  VerticalScrollBarVisibility="Auto" />
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top"
+                                       Text="Mẹo: Bấm vào bất kỳ ô ngày nào trong bảng (kể cả ngày đã chấm công) để sửa hoặc xóa ở khung bên dưới."
+                                       FontSize="12"
+                                       Opacity="0.78"
+                                       Margin="0,0,0,8" />
+                            <DataGrid x:Name="MatrixGrid"
+                                      ItemsSource="{Binding DailyMatrixView}"
+                                      AutoGenerateColumns="True"
+                                      IsReadOnly="True"
+                                      CanUserAddRows="False"
+                                      SelectionUnit="Cell"
+                                      SelectionMode="Single"
+                                      SelectedCellsChanged="MatrixGrid_SelectedCellsChanged"
+                                      ToolTip="Bấm vào ô ngày để sửa chấm công ngày đó (kể cả ngày đã chấm)"
+                                      FrozenColumnCount="2"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto" />
+                        </DockPanel>
                     </Border>
                 </TabItem>
 
-                <TabItem Header="2. Nhật ký Chi tiết &amp; Chỉnh sửa Giờ tùy chỉnh">
-                    <Grid Margin="0,10,0,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="12" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <Border Grid.Row="0"
-                                Padding="10"
-                                CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource AppCardBackgroundBrush}"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource AppCardBorderBrush}">
-                            <DataGrid ItemsSource="{Binding DailyRecords}"
-                                      SelectedItem="{Binding SelectedRecord}"
-                                      AutoGenerateColumns="False"
-                                      IsReadOnly="True">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Ngày" Binding="{Binding DateKey}" Width="95" />
-                                    <DataGridTextColumn Header="Mã NV" Binding="{Binding EmployeeCode}" Width="85" />
-                                    <DataGridTextColumn Header="Họ và tên" Binding="{Binding EmployeeName}" Width="160" />
-                                    <DataGridTextColumn Header="Giờ vào" Binding="{Binding CheckInLocal}" Width="75" />
-                                    <DataGridTextColumn Header="Giờ ra" Binding="{Binding CheckOutLocal}" Width="75" />
-                                    <DataGridTextColumn Header="Giờ làm" Binding="{Binding WorkedHours, StringFormat=F2}" Width="70" />
-                                    <DataGridTextColumn Header="Số công" Binding="{Binding WorkDayUnits, StringFormat=F2}" Width="70" />
-                                    <DataGridTextColumn Header="OT (h)" Binding="{Binding OvertimeHours, StringFormat=F1}" Width="65" />
-                                    <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="85" />
-                                    <DataGridTextColumn Header="Nguồn" Binding="{Binding SourceText}" Width="105" />
-                                    <DataGridTextColumn Header="Ghi chú" Binding="{Binding Notes}" Width="*" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Border>
-
-                        <!-- Manual Hour Edit Bar -->
-                        <Border Grid.Row="2"
-                                Padding="{DynamicResource AppCardPadding}"
-                                CornerRadius="{DynamicResource AppCardCornerRadius}"
-                                Background="{DynamicResource AppCardBackgroundBrush}"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource AppCardBorderBrush}">
-                            <StackPanel>
-                                <TextBlock Text="Thêm mới hoặc Chỉnh sửa giờ chấm công cho dòng đang chọn" FontWeight="SemiBold" Margin="0,0,0,8" />
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="200" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="135" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="95" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="95" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="80" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="80" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Nhân viên" FontSize="11.5" Margin="0,0,0,2" />
-                                        <ComboBox ItemsSource="{Binding Employees}" SelectedItem="{Binding EditEmployee}">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding FullName}" />
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Text="Ngày" FontSize="11.5" Margin="0,0,0,2" />
-                                        <DatePicker SelectedDate="{Binding EditWorkDate}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="4">
-                                        <TextBlock Text="Vào (HH:mm)" FontSize="11.5" Margin="0,0,0,2" />
-                                        <ui:TextBox Text="{Binding EditCheckInText, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="6">
-                                        <TextBlock Text="Ra (HH:mm)" FontSize="11.5" Margin="0,0,0,2" />
-                                        <ui:TextBox Text="{Binding EditCheckOutText, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="8">
-                                        <TextBlock Text="Trạng thái" FontSize="11.5" Margin="0,0,0,2" />
-                                        <ComboBox ItemsSource="{Binding AttendanceStatuses}" SelectedItem="{Binding EditStatus}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="10">
-                                        <TextBlock Text="Công" FontSize="11.5" Margin="0,0,0,2" />
-                                        <ui:TextBox Text="{Binding EditWorkDayUnits, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="12">
-                                        <TextBlock Text="OT (h)" FontSize="11.5" Margin="0,0,0,2" />
-                                        <ui:TextBox Text="{Binding EditOvertimeHours, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </Grid>
-
-                                <Grid Margin="0,10,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="10" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="8" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <ui:TextBox Grid.Column="0" Text="{Binding EditNotes, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Ghi chú..." />
-                                    <ui:Button Grid.Column="2" Content="Xóa dòng đang chọn" Command="{Binding DeleteSelectedRecordCommand}" />
-                                    <ui:Button Grid.Column="4" Appearance="Primary" Content="Lưu thay đổi giờ công" Command="{Binding SaveManualEditCommand}" />
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
+                <TabItem Header="2. Nhật ký Chi tiết theo Lượt">
+                    <Border Margin="0,10,0,0"
+                            Padding="10"
+                            CornerRadius="{DynamicResource AppCardCornerRadius}"
+                            Background="{DynamicResource AppCardBackgroundBrush}"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource AppCardBorderBrush}">
+                        <DataGrid ItemsSource="{Binding DailyRecords}"
+                                  SelectedItem="{Binding SelectedRecord}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Ngày" Binding="{Binding DateKey}" Width="95" />
+                                <DataGridTextColumn Header="Mã NV" Binding="{Binding EmployeeCode}" Width="85" />
+                                <DataGridTextColumn Header="Họ và tên" Binding="{Binding EmployeeName}" Width="160" />
+                                <DataGridTextColumn Header="Giờ vào" Binding="{Binding CheckInLocal}" Width="75" />
+                                <DataGridTextColumn Header="Giờ ra" Binding="{Binding CheckOutLocal}" Width="75" />
+                                <DataGridTextColumn Header="Giờ làm" Binding="{Binding WorkedHours, StringFormat=F2}" Width="70" />
+                                <DataGridTextColumn Header="Số công" Binding="{Binding WorkDayUnits, StringFormat=F2}" Width="70" />
+                                <DataGridTextColumn Header="OT (h)" Binding="{Binding OvertimeHours, StringFormat=F1}" Width="65" />
+                                <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="85" />
+                                <DataGridTextColumn Header="Nguồn" Binding="{Binding SourceText}" Width="105" />
+                                <DataGridTextColumn Header="Ghi chú" Binding="{Binding Notes}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
                 </TabItem>
             </TabControl>
+
+            <!-- Shared Daily Attendance Editor (Visible Across Both Tabs) -->
+            <Border Grid.Row="3"
+                    Padding="{DynamicResource AppCardPadding}"
+                    CornerRadius="{DynamicResource AppCardCornerRadius}"
+                    Background="{DynamicResource AppCardBackgroundBrush}"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource AppCardBorderBrush}">
+                <StackPanel>
+                    <TextBlock Text="{Binding EditorHeaderText}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource AppAccentBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="95" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="95" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="80" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Nhân viên" FontSize="11.5" Margin="0,0,0,2" />
+                            <ComboBox ItemsSource="{Binding Employees}" SelectedItem="{Binding EditEmployee}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding FullName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Ngày" FontSize="11.5" Margin="0,0,0,2" />
+                            <DatePicker SelectedDate="{Binding EditWorkDate}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="Vào (HH:mm)" FontSize="11.5" Margin="0,0,0,2" />
+                            <ui:TextBox Text="{Binding EditCheckInText, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="6">
+                            <TextBlock Text="Ra (HH:mm)" FontSize="11.5" Margin="0,0,0,2" />
+                            <ui:TextBox Text="{Binding EditCheckOutText, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="8">
+                            <TextBlock Text="Trạng thái" FontSize="11.5" Margin="0,0,0,2" />
+                            <ComboBox ItemsSource="{Binding AttendanceStatuses}" SelectedItem="{Binding EditStatus}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="10">
+                            <TextBlock Text="Công" FontSize="11.5" Margin="0,0,0,2" />
+                            <ui:TextBox Text="{Binding EditWorkDayUnits, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="12">
+                            <TextBlock Text="OT (h)" FontSize="11.5" Margin="0,0,0,2" />
+                            <ui:TextBox Text="{Binding EditOvertimeHours, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Grid.Column="0" Text="{Binding EditNotes, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Ghi chú..." />
+                        <ui:Button Grid.Column="2" Content="Xóa chấm công ngày này" Command="{Binding DeleteEditedDayCommand}" />
+                        <ui:Button Grid.Column="4" Appearance="Primary" Content="{Binding SaveButtonText}" Command="{Binding SaveManualEditCommand}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 </controls:EzFluentWindow>

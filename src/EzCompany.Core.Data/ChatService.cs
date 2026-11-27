@@ -168,6 +168,98 @@ public sealed class ChatService
         return conv;
     }
 
+    public async Task<ChatMessageEntity> UpdateGroupConversationAsync(
+        Guid conversationId,
+        string newName,
+        IReadOnlyList<(string MachineId, string FullName)> members,
+        CancellationToken ct = default)
+    {
+        EnsureSession();
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            throw new ArgumentException("Vui lòng nhập tên nhóm chat.", nameof(newName));
+        }
+
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        ChatConversationEntity conv = await db.ChatConversations
+            .FirstOrDefaultAsync(c => c.Id == conversationId, ct)
+            .ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Không tìm thấy nhóm chat.");
+
+        var oldMachines = new List<string>();
+        try
+        {
+            oldMachines = JsonSerializer.Deserialize<List<string>>(conv.MemberMachineIdsJson) ?? [];
+        }
+        catch
+        {
+        }
+
+        var machineSet = new List<string> { _paths.MachineId };
+        var nameSet = new List<string> { _session.FullName };
+        foreach ((string m, string n) in members)
+        {
+            if (!string.IsNullOrWhiteSpace(m) && !machineSet.Contains(m, StringComparer.OrdinalIgnoreCase))
+            {
+                machineSet.Add(m);
+                nameSet.Add(n);
+            }
+        }
+
+        DateTimeOffset now = _timeProvider.GetUtcNow();
+        conv.Name = newName.Trim();
+        conv.MemberMachineIdsJson = JsonSerializer.Serialize(machineSet);
+        conv.MemberNamesJson = JsonSerializer.Serialize(nameSet);
+        conv.UpdatedAtUtc = now;
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        string[] allTargets = oldMachines
+            .Concat(machineSet)
+            .Where(m => !string.Equals(m, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return await SendMessageAsync(
+            conversationId,
+            $"👥 {_session.FullName} đã cập nhật nhóm '{conv.Name}' ({machineSet.Count} thành viên).",
+            null,
+            null,
+            allTargets,
+            ct,
+            messageType: "GroupUpdated").ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<ChatMessageEntity>> SearchMessagesAsync(
+        Guid? conversationId,
+        string query,
+        int limit = 100,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        string trimmed = query.Trim();
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        IQueryable<ChatMessageEntity> q = db.ChatMessages.AsNoTracking();
+        if (conversationId.HasValue)
+        {
+            q = q.Where(m => m.ConversationId == conversationId.Value);
+        }
+
+        List<ChatMessageEntity> all = await q.ToListAsync(ct).ConfigureAwait(false);
+        return all
+            .Where(m =>
+                m.Content.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ||
+                m.SenderFullName.Contains(trimmed, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(m.AttachmentFileName) &&
+                 m.AttachmentFileName.Contains(trimmed, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(m => m.SentAtUtc)
+            .TakeLast(limit)
+            .ToArray();
+    }
+
     public async Task<IReadOnlyList<ChatConversationEntity>> GetConversationsAsync(CancellationToken ct = default)
     {
         _ = await EnsureCompanyGeneralGroupAsync(ct).ConfigureAwait(false);
@@ -260,7 +352,9 @@ public sealed class ChatService
         Guid? linkedTaskId,
         IReadOnlyList<string> targetMachineIds,
         CancellationToken ct = default,
-        string messageType = "Text")
+        string messageType = "Text",
+        Guid? replyToMessageId = null,
+        string? replyPreviewText = null)
     {
         EnsureSession();
         if (string.IsNullOrWhiteSpace(content) && string.IsNullOrWhiteSpace(sourceAttachmentPath))
@@ -320,7 +414,9 @@ public sealed class ChatService
             AttachmentSizeBytes = savedSize,
             LinkedTaskId = linkedTaskId,
             SentAtUtc = now,
-            PendingSyncTargetsJson = targets.Length > 0 ? JsonSerializer.Serialize(targets) : null
+            PendingSyncTargetsJson = targets.Length > 0 ? JsonSerializer.Serialize(targets) : null,
+            ReplyToMessageId = replyToMessageId,
+            ReplyPreviewText = string.IsNullOrWhiteSpace(replyPreviewText) ? null : replyPreviewText.Trim()
         };
 
         await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -382,6 +478,42 @@ public sealed class ChatService
             ct).ConfigureAwait(false);
     }
 
+    public async Task<ChatMessageEntity> UnpinTaskFromConversationAsync(
+        Guid conversationId,
+        IReadOnlyList<string> targetMachineIds,
+        CancellationToken ct = default)
+    {
+        EnsureSession();
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        ChatConversationEntity conv = await db.ChatConversations.FirstOrDefaultAsync(c => c.Id == conversationId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Không tìm thấy cuộc trò chuyện.");
+
+        if (!conv.PinnedTaskId.HasValue && string.IsNullOrWhiteSpace(conv.PinnedTaskSummary))
+        {
+            throw new InvalidOperationException("Đoạn chat chưa ghim công việc nào.");
+        }
+
+        Guid? prevId = conv.PinnedTaskId;
+        string? prevSummary = conv.PinnedTaskSummary;
+        DateTimeOffset now = _timeProvider.GetUtcNow();
+        conv.PinnedTaskId = null;
+        conv.PinnedTaskSummary = null;
+        conv.UpdatedAtUtc = now;
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        await _audit.LogAsync("CHAT_TASK_UNPINNED", "core.chat", prevSummary ?? string.Empty, $"Conversation={conv.Name}", "Info", ct)
+            .ConfigureAwait(false);
+
+        return await SendMessageAsync(
+            conversationId,
+            $"📍 Đã bỏ ghim công việc: {prevSummary}",
+            null,
+            prevId,
+            targetMachineIds,
+            ct,
+            messageType: "UnpinnedTask").ConfigureAwait(false);
+    }
+
     public async Task<bool> UpsertIncomingChatSyncAsync(
         ChatConversationEntity incomingConv,
         ChatMessageEntity incomingMsg,
@@ -439,7 +571,21 @@ public sealed class ChatService
         else if (incomingConv.UpdatedAtUtc >= conv.UpdatedAtUtc)
         {
             conv.UpdatedAtUtc = incomingConv.UpdatedAtUtc;
-            if (incomingConv.PinnedTaskId.HasValue)
+            bool isGroupUpdate = string.Equals(incomingMsg.MessageType, "GroupUpdated", StringComparison.OrdinalIgnoreCase);
+            if (isGroupUpdate)
+            {
+                conv.Name = incomingConv.Name;
+                conv.MemberMachineIdsJson = incomingConv.MemberMachineIdsJson;
+                conv.MemberNamesJson = incomingConv.MemberNamesJson;
+            }
+
+            bool isUnpin = string.Equals(incomingMsg.MessageType, "UnpinnedTask", StringComparison.OrdinalIgnoreCase);
+            if (isUnpin && !incomingConv.PinnedTaskId.HasValue)
+            {
+                conv.PinnedTaskId = null;
+                conv.PinnedTaskSummary = null;
+            }
+            else if (incomingConv.PinnedTaskId.HasValue)
             {
                 conv.PinnedTaskId = incomingConv.PinnedTaskId;
                 conv.PinnedTaskSummary = incomingConv.PinnedTaskSummary;
@@ -476,7 +622,9 @@ public sealed class ChatService
             AttachmentSizeBytes = incomingMsg.AttachmentSizeBytes,
             LinkedTaskId = incomingMsg.LinkedTaskId,
             SentAtUtc = incomingMsg.SentAtUtc,
-            PendingSyncTargetsJson = null
+            PendingSyncTargetsJson = null,
+            ReplyToMessageId = incomingMsg.ReplyToMessageId,
+            ReplyPreviewText = incomingMsg.ReplyPreviewText
         });
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);

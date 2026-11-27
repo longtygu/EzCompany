@@ -84,3 +84,30 @@ public sealed record TaskAssignedNotificationEvent(
     string AssignerFullName,
     string Priority,
     DateTimeOffset? DueDateUtc);
+
+public sealed record UserAvatarUpdatedEvent(
+    string MachineId,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record LeaveRequestUpdatedEvent(
+    Guid RequestId,
+    string EmployeeName,
+    string Status,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record ExpenseRequestUpdatedEvent(
+    Guid RequestId,
+    string RequesterName,
+    string Status,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record SharedDocumentUpdatedEvent(
+    Guid DocumentId,
+    string Title,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record TaskDeadlineReminderEvent(
+    Guid TaskId,
+    string Title,
+    DateTimeOffset DueDateUtc,
+    bool IsOverdue);

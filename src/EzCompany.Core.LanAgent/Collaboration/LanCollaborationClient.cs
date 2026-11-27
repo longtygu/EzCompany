@@ -29,6 +29,10 @@ public sealed class LanCollaborationClient
     private readonly CompanyBrandingService _branding;
     private readonly ChatService _chat;
     private readonly TimelinePlanService _timeline;
+    private readonly UserAvatarService _avatars;
+    private readonly LeaveRequestService _leaves;
+    private readonly AccountingLedgerService _ledger;
+    private readonly SharedDocumentService _sharedDocs;
 
     public LanCollaborationClient(
         IHttpClientFactory httpFactory,
@@ -41,7 +45,11 @@ public sealed class LanCollaborationClient
         DirectorLanClient directorClient,
         CompanyBrandingService branding,
         ChatService chat,
-        TimelinePlanService timeline)
+        TimelinePlanService timeline,
+        UserAvatarService avatars,
+        LeaveRequestService leaves,
+        AccountingLedgerService ledger,
+        SharedDocumentService sharedDocs)
     {
         _httpFactory = httpFactory;
         _appDbFactory = appDbFactory;
@@ -54,6 +62,10 @@ public sealed class LanCollaborationClient
         _branding = branding;
         _chat = chat;
         _timeline = timeline;
+        _avatars = avatars;
+        _leaves = leaves;
+        _ledger = ledger;
+        _sharedDocs = sharedDocs;
     }
 
     public async Task<int> PushCompanyBrandingToOnlinePeersAsync(CancellationToken ct = default)
@@ -166,7 +178,9 @@ public sealed class LanCollaborationClient
             LinkedTaskId: msg.LinkedTaskId,
             SentAtUtc: msg.SentAtUtc,
             SenderSignedPolicyJson: senderPolicyJson,
-            MessageType: string.IsNullOrWhiteSpace(msg.MessageType) ? "Text" : msg.MessageType);
+            MessageType: string.IsNullOrWhiteSpace(msg.MessageType) ? "Text" : msg.MessageType,
+            ReplyToMessageId: msg.ReplyToMessageId,
+            ReplyPreviewText: msg.ReplyPreviewText);
 
         using HttpResponseMessage resp = await SendDevicePostAsync(
             targetEndpoint,
@@ -233,7 +247,9 @@ public sealed class LanCollaborationClient
                 AttachmentSha256 = item.AttachmentSha256,
                 AttachmentSizeBytes = item.AttachmentSizeBytes,
                 LinkedTaskId = item.LinkedTaskId,
-                SentAtUtc = item.SentAtUtc
+                SentAtUtc = item.SentAtUtc,
+                ReplyToMessageId = item.ReplyToMessageId,
+                ReplyPreviewText = item.ReplyPreviewText
             };
 
             if (await _chat.UpsertIncomingChatSyncAsync(conv, msg, attachBytes, ct).ConfigureAwait(false))
@@ -404,7 +420,8 @@ public sealed class LanCollaborationClient
             policyJson,
             record.OvertimeHours,
             record.WorkDayUnits,
-            record.IsManualEntry);
+            record.IsManualEntry,
+            record.IsDeleted);
 
         List<string> endpoints = [];
         if (!string.IsNullOrWhiteSpace(overrideEndpoint))
@@ -441,6 +458,275 @@ public sealed class LanCollaborationClient
         }
 
         return sent;
+    }
+
+    public async Task<int> SyncAvatarsWithPeerAsync(string peerEndpoint, CancellationToken ct = default)
+    {
+        (Guid companyId, _) = await GetCompanyIdAsync(ct).ConfigureAwait(false);
+        string? policyJson = _keyStore.LoadPolicyLicenseJson();
+        if (companyId == Guid.Empty || string.IsNullOrWhiteSpace(policyJson))
+        {
+            return 0;
+        }
+
+        IReadOnlyList<UserAvatarSyncItem> localAvatars = await _avatars.GetAllAvatarsForSyncAsync(ct).ConfigureAwait(false);
+        if (localAvatars.Count > 0)
+        {
+            var reqDto = new AvatarSyncRequestDto(
+                localAvatars.Select(a => new UserAvatarDto(a.MachineId, a.AvatarBase64, a.UpdatedAtUtc)).ToArray(),
+                policyJson);
+            using HttpResponseMessage _ = await SendDevicePostAsync(peerEndpoint, "/api/v1/collab/avatars", reqDto, companyId, ct)
+                .ConfigureAwait(false);
+        }
+
+        List<UserAvatarDto>? remote = await SendDeviceGetAsync<List<UserAvatarDto>>(
+            peerEndpoint, "/api/v1/collab/avatars", companyId, ct).ConfigureAwait(false);
+        if (remote is null || remote.Count == 0)
+        {
+            return 0;
+        }
+
+        int changed = 0;
+        foreach (UserAvatarDto av in remote)
+        {
+            if (av.UpdatedAtUtc.HasValue &&
+                await _avatars.UpsertPeerAvatarAsync(av.MachineId, av.AvatarBase64, av.UpdatedAtUtc.Value, ct).ConfigureAwait(false))
+            {
+                changed++;
+            }
+        }
+
+        return changed;
+    }
+
+    public async Task<int> SyncLeaveRequestsWithPeerAsync(string peerEndpoint, CancellationToken ct = default)
+    {
+        (Guid companyId, _) = await GetCompanyIdAsync(ct).ConfigureAwait(false);
+        string? policyJson = _keyStore.LoadPolicyLicenseJson();
+        if (companyId == Guid.Empty || string.IsNullOrWhiteSpace(policyJson))
+        {
+            return 0;
+        }
+
+        IReadOnlyList<LeaveRequestEntity> local = await _leaves.GetAllForSyncAsync(ct).ConfigureAwait(false);
+        if (local.Count > 0)
+        {
+            var batch = new LeaveRequestSyncBatchDto(
+                local.Select(r => new LeaveRequestDto(
+                    r.Id, r.CompanyId, r.EmployeeProfileId, r.EmployeeCode, r.EmployeeName, r.MachineId,
+                    r.RequestType, r.StartDateKey, r.EndDateKey, r.OvertimeHours, r.Reason,
+                    r.Status, r.ReviewedByName, r.ReviewedAtUtc, r.ReviewNotes, r.CreatedAtUtc, r.UpdatedAtUtc)).ToArray(),
+                policyJson);
+            using HttpResponseMessage _ = await SendDevicePostAsync(peerEndpoint, "/api/v1/collab/leave-requests/sync", batch, companyId, ct)
+                .ConfigureAwait(false);
+        }
+
+        List<LeaveRequestDto>? remote = await SendDeviceGetAsync<List<LeaveRequestDto>>(
+            peerEndpoint, "/api/v1/collab/leave-requests", companyId, ct).ConfigureAwait(false);
+        if (remote is null || remote.Count == 0)
+        {
+            return 0;
+        }
+
+        return await _leaves.UpsertIncomingRequestsAsync(remote.Select(x => new LeaveRequestEntity
+        {
+            Id = x.Id,
+            CompanyId = x.CompanyId,
+            EmployeeProfileId = x.EmployeeProfileId,
+            EmployeeCode = x.EmployeeCode,
+            EmployeeName = x.EmployeeName,
+            MachineId = x.MachineId,
+            RequestType = x.RequestType,
+            StartDateKey = x.StartDateKey,
+            EndDateKey = x.EndDateKey,
+            OvertimeHours = x.OvertimeHours,
+            Reason = x.Reason,
+            Status = x.Status,
+            ReviewedByName = x.ReviewedByName,
+            ReviewedAtUtc = x.ReviewedAtUtc,
+            ReviewNotes = x.ReviewNotes,
+            CreatedAtUtc = x.CreatedAtUtc,
+            UpdatedAtUtc = x.UpdatedAtUtc
+        }), ct).ConfigureAwait(false);
+    }
+
+    public async Task<int> SyncExpensesWithPeerAsync(string peerEndpoint, CancellationToken ct = default)
+    {
+        (Guid companyId, _) = await GetCompanyIdAsync(ct).ConfigureAwait(false);
+        string? policyJson = _keyStore.LoadPolicyLicenseJson();
+        if (companyId == Guid.Empty || string.IsNullOrWhiteSpace(policyJson))
+        {
+            return 0;
+        }
+
+        IReadOnlyList<ExpenseRequestEntity> local = await _ledger.GetAllExpensesForSyncAsync(ct).ConfigureAwait(false);
+        if (local.Count > 0)
+        {
+            var batch = new ExpenseRequestSyncBatchDto(
+                local.Select(x => new ExpenseRequestDto(
+                    x.Id, x.CompanyId, x.RequesterMachineId, x.RequesterUsername, x.RequesterFullName,
+                    x.RequestType, x.Category, x.AmountVnd, x.Description, x.ReceiptFileName, x.ReceiptVaultPath,
+                    x.Status, x.ApprovedByName, x.ApprovedAtUtc, x.ReviewNotes, x.CreatedAtUtc, x.UpdatedAtUtc)).ToArray(),
+                policyJson);
+            using HttpResponseMessage _ = await SendDevicePostAsync(peerEndpoint, "/api/v1/collab/expenses/sync", batch, companyId, ct)
+                .ConfigureAwait(false);
+        }
+
+        List<ExpenseRequestDto>? remote = await SendDeviceGetAsync<List<ExpenseRequestDto>>(
+            peerEndpoint, "/api/v1/collab/expenses", companyId, ct).ConfigureAwait(false);
+        if (remote is null || remote.Count == 0)
+        {
+            return 0;
+        }
+
+        return await _ledger.UpsertIncomingExpensesAsync(remote.Select(x => new ExpenseRequestEntity
+        {
+            Id = x.Id,
+            CompanyId = x.CompanyId,
+            RequesterMachineId = x.RequesterMachineId,
+            RequesterUsername = x.RequesterUsername,
+            RequesterFullName = x.RequesterFullName,
+            RequestType = x.RequestType,
+            Category = x.Category,
+            AmountVnd = x.AmountVnd,
+            Description = x.Description,
+            ReceiptFileName = x.ReceiptFileName,
+            ReceiptVaultPath = null,
+            Status = x.Status,
+            ApprovedByName = x.ApprovedByName,
+            ApprovedAtUtc = x.ApprovedAtUtc,
+            ReviewNotes = x.ReviewNotes,
+            CreatedAtUtc = x.CreatedAtUtc,
+            UpdatedAtUtc = x.UpdatedAtUtc
+        }), ct).ConfigureAwait(false);
+    }
+
+    public async Task<int> SyncSharedDocumentsWithPeerAsync(string peerEndpoint, CancellationToken ct = default)
+    {
+        (Guid companyId, _) = await GetCompanyIdAsync(ct).ConfigureAwait(false);
+        string? policyJson = _keyStore.LoadPolicyLicenseJson();
+        if (companyId == Guid.Empty || string.IsNullOrWhiteSpace(policyJson))
+        {
+            return 0;
+        }
+
+        IReadOnlyList<SharedDocumentEntity> local = await _sharedDocs.GetAllForSyncAsync(ct).ConfigureAwait(false);
+        if (local.Count > 0)
+        {
+            var batch = new SharedDocumentSyncBatchDto(
+                local.Select(d => new SharedDocumentDto(
+                    d.Id, d.CompanyId, d.Title, d.Category, d.Description, d.FileName,
+                    d.FileSha256, d.FileSizeBytes, d.UploadedByMachineId, d.UploadedByName,
+                    d.UploadedAtUtc, d.IsDeleted, d.UpdatedAtUtc)).ToArray(),
+                policyJson);
+            using HttpResponseMessage _ = await SendDevicePostAsync(peerEndpoint, "/api/v1/collab/docs/sync", batch, companyId, ct)
+                .ConfigureAwait(false);
+        }
+
+        List<SharedDocumentDto>? remote = await SendDeviceGetAsync<List<SharedDocumentDto>>(
+            peerEndpoint, "/api/v1/collab/docs", companyId, ct).ConfigureAwait(false);
+        if (remote is null || remote.Count == 0)
+        {
+            return 0;
+        }
+
+        return await _sharedDocs.UpsertIncomingDocumentsAsync(remote.Select(x => new SharedDocumentEntity
+        {
+            Id = x.Id,
+            CompanyId = x.CompanyId,
+            Title = x.Title,
+            Category = x.Category,
+            Description = x.Description,
+            FileName = x.FileName,
+            VaultRelativePath = null,
+            FileSha256 = x.FileSha256,
+            FileSizeBytes = x.FileSizeBytes,
+            UploadedByMachineId = x.UploadedByMachineId,
+            UploadedByName = x.UploadedByName,
+            UploadedAtUtc = x.UploadedAtUtc,
+            IsDeleted = x.IsDeleted,
+            UpdatedAtUtc = x.UpdatedAtUtc
+        }), ct).ConfigureAwait(false);
+    }
+
+    public async Task<string?> DownloadSharedDocumentFromPeersAsync(
+        Guid docId,
+        string? preferredEndpoint = null,
+        CancellationToken ct = default)
+    {
+        (Guid companyId, _) = await GetCompanyIdAsync(ct).ConfigureAwait(false);
+        if (companyId == Guid.Empty)
+        {
+            return null;
+        }
+
+        List<string> candidates = [];
+        if (!string.IsNullOrWhiteSpace(preferredEndpoint))
+        {
+            candidates.Add(preferredEndpoint);
+        }
+
+        foreach (DiscoveredPeer peer in _discovery.GetPeers()
+                     .Where(p => string.Equals(p.CompanyId, companyId.ToString("D"), StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!candidates.Contains(peer.Endpoint, StringComparer.OrdinalIgnoreCase))
+            {
+                candidates.Add(peer.Endpoint);
+            }
+        }
+
+        foreach (string ep in candidates)
+        {
+            try
+            {
+                byte[]? bytes = await DownloadBytesDeviceSignedAsync(
+                    ep,
+                    $"/api/v1/collab/docs/{docId:D}/download",
+                    companyId,
+                    ct).ConfigureAwait(false);
+                if (bytes is { Length: > 0 })
+                {
+                    return await _sharedDocs.SaveDownloadedFileAsync(docId, bytes, null, ct).ConfigureAwait(false);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
+    }
+
+    public async Task<int> SyncAllEnterpriseEntitiesWithOnlinePeersAsync(CancellationToken ct = default)
+    {
+        (Guid companyId, _) = await GetCompanyIdAsync(ct).ConfigureAwait(false);
+        if (companyId == Guid.Empty)
+        {
+            return 0;
+        }
+
+        string companyIdStr = companyId.ToString("D");
+        DiscoveredPeer[] peers = _discovery.GetPeers()
+            .Where(p => string.Equals(p.CompanyId, companyIdStr, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(p.MachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        int total = 0;
+        foreach (DiscoveredPeer peer in peers)
+        {
+            try
+            {
+                total += await SyncAvatarsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                total += await SyncLeaveRequestsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                total += await SyncExpensesWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                total += await SyncSharedDocumentsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
+        return total;
     }
 
     private async Task<(Guid CompanyId, bool IsDirector)> GetCompanyIdAsync(CancellationToken ct)

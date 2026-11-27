@@ -16,6 +16,7 @@ public sealed partial class OfficePdfStudioViewModel : ObservableObject
     }
 
     public ObservableCollection<string> MergeFiles { get; } = [];
+    public ObservableCollection<string> ImageToPdfFiles { get; } = [];
     public IReadOnlyList<int> RotationAngles { get; } = [90, 180, 270];
 
     [ObservableProperty] private string? _selectedMergeFile;
@@ -40,6 +41,18 @@ public sealed partial class OfficePdfStudioViewModel : ObservableObject
     [ObservableProperty] private double _watermarkOpacity = 0.25;
     [ObservableProperty] private double _watermarkFontSize = 36;
     [ObservableProperty] private string _watermarkColorHex = "#B00020";
+
+    // Images -> PDF
+    [ObservableProperty] private string? _selectedImageToPdfFile;
+    [ObservableProperty] private bool _imageFitToA4 = true;
+
+    // Stamp signature / seal
+    [ObservableProperty] private string _stampInputPdfPath = string.Empty;
+    [ObservableProperty] private string _stampImagePath = string.Empty;
+    [ObservableProperty] private int _stampPageNumber = 1;
+    [ObservableProperty] private double _stampXPercent = 65.0;
+    [ObservableProperty] private double _stampYPercent = 72.0;
+    [ObservableProperty] private double _stampWidthPercent = 20.0;
 
     [RelayCommand]
     private void AddMergeFiles()
@@ -194,6 +207,90 @@ public sealed partial class OfficePdfStudioViewModel : ObservableObject
 
         PdfOperationResult res = await _pdfService.WatermarkPdfAsync(WatermarkInputPath, opts, outPath, SaveToVault);
         StatusMessage = $"Đã đóng dấu Watermark ({res.PageCount} trang) -> {res.OutputPath}";
+    }
+
+    [RelayCommand]
+    private void AddImagesToPdf()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title = "Chọn ảnh chuyển thành PDF",
+            Filter = "Hình ảnh (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp",
+            Multiselect = true
+        };
+        if (dlg.ShowDialog() != true) return;
+        foreach (string f in dlg.FileNames)
+        {
+            ImageToPdfFiles.Add(f);
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveSelectedImageToPdf()
+    {
+        if (SelectedImageToPdfFile is not null)
+        {
+            ImageToPdfFiles.Remove(SelectedImageToPdfFile);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExecuteImagesToPdfAsync()
+    {
+        if (ImageToPdfFiles.Count == 0)
+        {
+            StatusMessage = "Thêm ít nhất 1 tệp ảnh để chuyển thành PDF.";
+            return;
+        }
+
+        string? outPath = PromptSavePdf($"ImagesToPdf_{DateTime.Now:yyyyMMdd}.pdf");
+        if (outPath is null) return;
+
+        PdfOperationResult res = await _pdfService.ConvertImagesToPdfAsync(ImageToPdfFiles.ToList(), outPath, ImageFitToA4, SaveToVault);
+        StatusMessage = $"Đã chuyển {res.PageCount} ảnh thành PDF -> {res.OutputPath}";
+    }
+
+    [RelayCommand]
+    private void BrowseStampPdf()
+    {
+        string? path = PromptOpenPdf();
+        if (path is not null) StampInputPdfPath = path;
+    }
+
+    [RelayCommand]
+    private void BrowseStampImage()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title = "Chọn ảnh chữ ký / con dấu (PNG nền trong suốt)",
+            Filter = "Hình ảnh (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
+        };
+        if (dlg.ShowDialog() == true) StampImagePath = dlg.FileName;
+    }
+
+    [RelayCommand]
+    private async Task ExecuteStampImageAsync()
+    {
+        if (!File.Exists(StampInputPdfPath) || !File.Exists(StampImagePath))
+        {
+            StatusMessage = "Vui lòng chọn đầy đủ tệp PDF và ảnh chữ ký / con dấu.";
+            return;
+        }
+
+        string? outPath = PromptSavePdf($"Signed_{Path.GetFileName(StampInputPdfPath)}");
+        if (outPath is null) return;
+
+        try
+        {
+            PdfOperationResult res = await _pdfService.StampImageOnPdfAsync(
+                StampInputPdfPath, StampImagePath, outPath,
+                StampPageNumber, StampXPercent, StampYPercent, StampWidthPercent, SaveToVault);
+            StatusMessage = $"Đã chèn ảnh chữ ký/con dấu trang {StampPageNumber} -> {res.OutputPath}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Lỗi chèn chữ ký/con dấu: {ex.Message}";
+        }
     }
 
     private static string? PromptOpenPdf()

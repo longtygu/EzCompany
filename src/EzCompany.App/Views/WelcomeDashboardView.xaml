@@ -101,7 +101,12 @@
                                     <ui:Button Content="Thu nhỏ (−)" Command="{Binding ZoomOutTimelineCommand}" Padding="10,5" Margin="0,0,6,4" />
                                     <ui:Button Content="Mặc định" Command="{Binding ResetTimelineZoomCommand}" Padding="10,5" Margin="0,0,6,4" />
                                     <ui:Button Content="Phóng to (+)" Command="{Binding ZoomInTimelineCommand}" Padding="10,5" Margin="0,0,14,4" />
-                                    <ui:Button Appearance="Secondary" Content="{Binding TimelineTrackToggleLabel}" Command="{Binding ToggleTimelineTracksCommand}" Padding="12,5" Margin="0,0,0,4" />
+                                    <ui:Button Appearance="Secondary" Content="{Binding TimelineTrackToggleLabel}" Command="{Binding ToggleTimelineTracksCommand}" Padding="12,5" Margin="0,0,10,4" />
+                                    <ComboBox ItemsSource="{Binding TimelineCategoryFilterOptions}"
+                                              SelectedItem="{Binding TimelineCategoryFilter}"
+                                              Width="120"
+                                              Margin="0,0,0,4"
+                                              ToolTip="Lọc lịch trình theo danh mục" />
                                 </WrapPanel>
 
                                 <Border Padding="8,10"

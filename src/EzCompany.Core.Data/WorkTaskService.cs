@@ -1,9 +1,22 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using EzCompany.Core.Abstractions;
 using EzCompany.Core.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace EzCompany.Core.Data;
+
+public sealed record WorkTaskSubtaskItem(Guid Id, string Title, bool IsDone);
+
+public static class WorkTaskRecurrenceRules
+{
+    public const string None = "None";
+    public const string Daily = "Daily";
+    public const string Weekly = "Weekly";
+    public const string Monthly = "Monthly";
+
+    public static readonly IReadOnlyList<string> All = [None, Daily, Weekly, Monthly];
+}
 
 public static class WorkTaskStatuses
 {
@@ -75,7 +88,9 @@ public sealed class WorkTaskService
         string description,
         string priority,
         DateTimeOffset? dueDateUtc,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string recurrenceRule = "None",
+        string subtasksJson = "[]")
     {
         EnsureActiveSession();
         if (string.IsNullOrWhiteSpace(title))
@@ -103,7 +118,9 @@ public sealed class WorkTaskService
             AssigneeRole = _session.Role,
             DueDateUtc = dueDateUtc ?? new DateTimeOffset(DateTimeOffset.Now.Date.AddHours(17).AddMinutes(30), DateTimeOffset.Now.Offset).ToUniversalTime(),
             CreatedAtUtc = now,
-            UpdatedAtUtc = now
+            UpdatedAtUtc = now,
+            RecurrenceRule = NormalizeRecurrence(recurrenceRule),
+            SubtasksJson = string.IsNullOrWhiteSpace(subtasksJson) ? "[]" : subtasksJson
         };
 
         await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -126,7 +143,9 @@ public sealed class WorkTaskService
         string priority,
         DateTimeOffset? dueDateUtc,
         string? assignmentAttachmentPath = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string recurrenceRule = "None",
+        string subtasksJson = "[]")
     {
         EnsureActiveSession();
         if (string.IsNullOrWhiteSpace(assigneeMachineId) || string.IsNullOrWhiteSpace(assigneeFullName))
@@ -178,7 +197,9 @@ public sealed class WorkTaskService
             AssignmentVaultPath = attachVaultPath,
             AssignmentFileSha256 = attachSha,
             PendingSyncTargetMachineId = isSelfTarget ? null : assigneeMachineId.Trim(),
-            PendingSyncAction = isSelfTarget ? null : "Assign"
+            PendingSyncAction = isSelfTarget ? null : "Assign",
+            RecurrenceRule = NormalizeRecurrence(recurrenceRule),
+            SubtasksJson = string.IsNullOrWhiteSpace(subtasksJson) ? "[]" : subtasksJson
         };
 
         await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -247,11 +268,90 @@ public sealed class WorkTaskService
         string action = completing ? "Completed" : "Reopened";
         string note = completing ? "Đánh dấu hoàn thành task cá nhân." : "Mở lại task cá nhân.";
         db.WorkTaskHistories.Add(BuildHistory(task.Id, action, note, null, now));
+        if (completing)
+        {
+            SpawnNextRecurrenceIfNeeded(db, task, now);
+        }
+
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         await _audit.LogAsync("TASK_SELF_TOGGLED", "core.tasks", task.Title, $"Status={task.Status}", "Info", ct).ConfigureAwait(false);
         _eventBus.Publish(new WorkTaskUpdatedEvent(task.Id, action, task.Title, _session.FullName, now));
         return task;
+    }
+
+    public async Task<WorkTaskEntity> UpdateSubtasksAsync(
+        Guid taskId,
+        IReadOnlyList<WorkTaskSubtaskItem> subtasks,
+        CancellationToken ct = default)
+    {
+        EnsureActiveSession();
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        WorkTaskEntity task = await db.WorkTasks.FirstOrDefaultAsync(x => x.Id == taskId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Không tìm thấy công việc.");
+
+        DateTimeOffset now = _timeProvider.GetUtcNow();
+        task.SubtasksJson = JsonSerializer.Serialize(subtasks ?? []);
+        task.UpdatedAtUtc = now;
+
+        if (string.Equals(task.TaskKind, WorkTaskKinds.Assigned, StringComparison.Ordinal))
+        {
+            if (!string.Equals(task.AssigneeMachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+            {
+                task.PendingSyncTargetMachineId = task.AssigneeMachineId;
+                task.PendingSyncAction = "StatusUpdate";
+            }
+            else if (!string.Equals(task.AssignerMachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
+            {
+                task.PendingSyncTargetMachineId = task.AssignerMachineId;
+                task.PendingSyncAction = "StatusUpdate";
+            }
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        _eventBus.Publish(new WorkTaskUpdatedEvent(task.Id, "SubtasksUpdated", task.Title, _session.FullName, now));
+        return task;
+    }
+
+    public static IReadOnlyList<WorkTaskSubtaskItem> ParseSubtasks(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<WorkTaskSubtaskItem[]>(json) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public async Task<IReadOnlyList<WorkTaskEntity>> GetTasksNearingDeadlineAsync(
+        TimeSpan lookAhead,
+        CancellationToken ct = default)
+    {
+        if (!_session.IsAuthenticated)
+        {
+            return [];
+        }
+
+        DateTimeOffset cutoff = _timeProvider.GetUtcNow().Add(lookAhead);
+        await using AppDbContext db = await _appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        List<WorkTaskEntity> mine = await db.WorkTasks.AsNoTracking()
+            .Where(x => x.AssigneeMachineId == _paths.MachineId &&
+                        x.Status != WorkTaskStatuses.Completed &&
+                        x.DueDateUtc != null)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return mine
+            .Where(x => x.DueDateUtc.HasValue && x.DueDateUtc.Value <= cutoff)
+            .OrderBy(x => x.DueDateUtc)
+            .ToArray();
     }
 
     public async Task DeleteSelfTaskAsync(Guid taskId, CancellationToken ct = default)
@@ -404,6 +504,11 @@ public sealed class WorkTaskService
             : (string.IsNullOrWhiteSpace(task.ReviewNotes) ? "Yêu cầu chỉnh sửa / làm lại." : $"Yêu cầu làm lại: {task.ReviewNotes}");
 
         db.WorkTaskHistories.Add(BuildHistory(task.Id, action, historyNote, null, now));
+        if (approveComplete)
+        {
+            SpawnNextRecurrenceIfNeeded(db, task, now);
+        }
+
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         await _audit.LogAsync("TASK_REVIEWED", "core.tasks", task.Title, $"Approved={approveComplete}", "Info", ct).ConfigureAwait(false);
@@ -475,7 +580,9 @@ public sealed class WorkTaskService
                 HandedOverAtUtc = incoming.HandedOverAtUtc,
                 ReviewNotes = incoming.ReviewNotes,
                 PendingSyncTargetMachineId = null,
-                PendingSyncAction = null
+                PendingSyncAction = null,
+                SubtasksJson = string.IsNullOrWhiteSpace(incoming.SubtasksJson) ? "[]" : incoming.SubtasksJson,
+                RecurrenceRule = NormalizeRecurrence(incoming.RecurrenceRule)
             };
             db.WorkTasks.Add(existing);
         }
@@ -491,6 +598,8 @@ public sealed class WorkTaskService
             existing.HandoverNotes = incoming.HandoverNotes;
             existing.HandedOverAtUtc = incoming.HandedOverAtUtc;
             existing.ReviewNotes = incoming.ReviewNotes;
+            existing.SubtasksJson = string.IsNullOrWhiteSpace(incoming.SubtasksJson) ? existing.SubtasksJson : incoming.SubtasksJson;
+            existing.RecurrenceRule = NormalizeRecurrence(incoming.RecurrenceRule);
             if (assignFileName is not null)
             {
                 existing.AssignmentFileName = assignFileName;
@@ -725,6 +834,72 @@ public sealed class WorkTaskService
     private static string NormalizePriority(string? priority) =>
         WorkTaskPriorities.All.FirstOrDefault(p => string.Equals(p, priority, StringComparison.OrdinalIgnoreCase))
         ?? WorkTaskPriorities.Normal;
+
+    private static string NormalizeRecurrence(string? rule) =>
+        WorkTaskRecurrenceRules.All.FirstOrDefault(r => string.Equals(r, rule, StringComparison.OrdinalIgnoreCase))
+        ?? WorkTaskRecurrenceRules.None;
+
+    private static DateTimeOffset? ComputeNextDueUtc(DateTimeOffset currentDueUtc, string rule) =>
+        rule switch
+        {
+            WorkTaskRecurrenceRules.Daily => currentDueUtc.AddDays(1),
+            WorkTaskRecurrenceRules.Weekly => currentDueUtc.AddDays(7),
+            WorkTaskRecurrenceRules.Monthly => currentDueUtc.AddMonths(1),
+            _ => null
+        };
+
+    private void SpawnNextRecurrenceIfNeeded(AppDbContext db, WorkTaskEntity completedTask, DateTimeOffset now)
+    {
+        string rule = NormalizeRecurrence(completedTask.RecurrenceRule);
+        if (rule == WorkTaskRecurrenceRules.None)
+        {
+            return;
+        }
+
+        DateTimeOffset baseDue = completedTask.DueDateUtc ?? now;
+        DateTimeOffset? nextDue = ComputeNextDueUtc(baseDue, rule);
+        if (!nextDue.HasValue)
+        {
+            return;
+        }
+
+        IReadOnlyList<WorkTaskSubtaskItem> resetSubtasks = ParseSubtasks(completedTask.SubtasksJson)
+            .Select(s => new WorkTaskSubtaskItem(Guid.NewGuid(), s.Title, false))
+            .ToArray();
+
+        bool isSelfTarget = string.Equals(completedTask.TaskKind, WorkTaskKinds.Self, StringComparison.Ordinal) ||
+                            string.Equals(completedTask.AssigneeMachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase);
+
+        Guid nextId = Guid.NewGuid();
+        var nextTask = new WorkTaskEntity
+        {
+            Id = nextId,
+            CompanyId = completedTask.CompanyId,
+            TaskKind = completedTask.TaskKind,
+            Title = completedTask.Title,
+            Description = completedTask.Description,
+            Priority = completedTask.Priority,
+            Status = WorkTaskStatuses.Pending,
+            AssignerMachineId = completedTask.AssignerMachineId,
+            AssignerUsername = completedTask.AssignerUsername,
+            AssignerFullName = completedTask.AssignerFullName,
+            AssignerRole = completedTask.AssignerRole,
+            AssigneeMachineId = completedTask.AssigneeMachineId,
+            AssigneeUsername = completedTask.AssigneeUsername,
+            AssigneeFullName = completedTask.AssigneeFullName,
+            AssigneeRole = completedTask.AssigneeRole,
+            DueDateUtc = nextDue.Value,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            SubtasksJson = JsonSerializer.Serialize(resetSubtasks),
+            RecurrenceRule = rule,
+            PendingSyncTargetMachineId = isSelfTarget ? null : completedTask.AssigneeMachineId,
+            PendingSyncAction = isSelfTarget ? null : "Assign"
+        };
+
+        db.WorkTasks.Add(nextTask);
+        db.WorkTaskHistories.Add(BuildHistory(nextId, "CreatedRecurring", $"Tự tạo chu kỳ lặp lại ({rule}).", null, now));
+    }
 
     private static string SanitizeFileName(string fileName)
     {

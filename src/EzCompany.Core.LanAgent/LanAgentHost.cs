@@ -90,6 +90,10 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
         builder.Services.AddSingleton(_rootServices.GetRequiredService<ChatService>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<TimelinePlanService>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<HrAttendanceService>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<UserAvatarService>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<LeaveRequestService>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<AccountingLedgerService>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<SharedDocumentService>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<NonceReplayCache>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<VaultPathGuard>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<DatabaseSnapshotService>());
@@ -608,7 +612,9 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 HandoverFileName = dto.HandoverFileName,
                 HandoverFileSha256 = dto.HandoverFileSha256,
                 HandedOverAtUtc = dto.HandedOverAtUtc,
-                ReviewNotes = dto.ReviewNotes
+                ReviewNotes = dto.ReviewNotes,
+                SubtasksJson = string.IsNullOrWhiteSpace(dto.SubtasksJson) ? "[]" : dto.SubtasksJson,
+                RecurrenceRule = string.IsNullOrWhiteSpace(dto.RecurrenceRule) ? "None" : dto.RecurrenceRule
             };
 
             await taskService.UpsertIncomingSyncedTaskAsync(
@@ -709,7 +715,9 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 AttachmentSha256 = dto.AttachmentSha256,
                 AttachmentSizeBytes = dto.AttachmentSizeBytes,
                 LinkedTaskId = dto.LinkedTaskId,
-                SentAtUtc = dto.SentAtUtc
+                SentAtUtc = dto.SentAtUtc,
+                ReplyToMessageId = dto.ReplyToMessageId,
+                ReplyPreviewText = dto.ReplyPreviewText
             };
 
             await chat.UpsertIncomingChatSyncAsync(conv, msg, attachBytes, ct).ConfigureAwait(false);
@@ -747,7 +755,8 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                     c.PinnedTaskId, c.PinnedTaskSummary,
                     m.Id, m.SenderMachineId, m.SenderUsername, m.SenderFullName,
                     m.Content, m.AttachmentFileName, m.AttachmentSha256, b64, m.AttachmentSizeBytes,
-                    m.LinkedTaskId, m.SentAtUtc, localPolicy, m.MessageType));
+                    m.LinkedTaskId, m.SentAtUtc, localPolicy, m.MessageType,
+                    m.ReplyToMessageId, m.ReplyPreviewText));
             }
 
             return Results.Ok(new ChatHistoryPullResponseDto(items));
@@ -894,10 +903,247 @@ public sealed class LanAgentHost : IHostedService, IAsyncDisposable
                 IsManualEntry = dto.IsManualEntry,
                 Status = dto.Status,
                 Notes = dto.Notes,
+                IsDeleted = dto.IsDeleted,
                 UpdatedAtUtc = dto.UpdatedAtUtc
             }, ct).ConfigureAwait(false);
 
             return Results.Ok(new { synced = true });
+        });
+
+        // 16. Enterprise Suite P2P Collab Sync: Avatars, Leave Requests, Expenses & Shared Documents
+        app.MapGet("/api/v1/collab/avatars", async (UserAvatarService avatars, CancellationToken ct) =>
+        {
+            IReadOnlyList<UserAvatarSyncItem> list = await avatars.GetAllAvatarsForSyncAsync(ct).ConfigureAwait(false);
+            return Results.Ok(list.Select(a => new UserAvatarDto(a.MachineId, a.AvatarBase64, a.UpdatedAtUtc)).ToArray());
+        });
+
+        app.MapPost("/api/v1/collab/avatars", async (
+            HttpContext http,
+            AvatarSyncRequestDto req,
+            LocalKeyStore keyStore,
+            PolicyEngine policyEngine,
+            UserAvatarService avatars,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            string callerDevicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            byte[]? pinnedRootPub = keyStore.LoadPinnedRootPublicKey();
+            if (pinnedRootPub is null || string.IsNullOrWhiteSpace(callerDevicePubB64))
+            {
+                return Results.Unauthorized();
+            }
+
+            PolicyVerificationResult verified = policyEngine.VerifyOffline(
+                req.SenderSignedPolicyJson, pinnedRootPub, callerMachineId, Convert.FromBase64String(callerDevicePubB64), commitClockGuard: false);
+            if (!verified.IsValid)
+            {
+                return Results.Json(new { message = verified.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            int changed = 0;
+            foreach (UserAvatarDto av in req.Avatars)
+            {
+                if (av.UpdatedAtUtc.HasValue &&
+                    await avatars.UpsertPeerAvatarAsync(av.MachineId, av.AvatarBase64, av.UpdatedAtUtc.Value, ct).ConfigureAwait(false))
+                {
+                    changed++;
+                }
+            }
+
+            return Results.Ok(new { changed });
+        });
+
+        app.MapGet("/api/v1/collab/leave-requests", async (LeaveRequestService leaves, CancellationToken ct) =>
+        {
+            IReadOnlyList<LeaveRequestEntity> all = await leaves.GetAllForSyncAsync(ct).ConfigureAwait(false);
+            return Results.Ok(all.Select(r => new LeaveRequestDto(
+                r.Id, r.CompanyId, r.EmployeeProfileId, r.EmployeeCode, r.EmployeeName, r.MachineId,
+                r.RequestType, r.StartDateKey, r.EndDateKey, r.OvertimeHours, r.Reason,
+                r.Status, r.ReviewedByName, r.ReviewedAtUtc, r.ReviewNotes, r.CreatedAtUtc, r.UpdatedAtUtc)).ToArray());
+        });
+
+        app.MapPost("/api/v1/collab/leave-requests/sync", async (
+            HttpContext http,
+            LeaveRequestSyncBatchDto req,
+            LocalKeyStore keyStore,
+            PolicyEngine policyEngine,
+            LeaveRequestService leaves,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            string callerDevicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            byte[]? pinnedRootPub = keyStore.LoadPinnedRootPublicKey();
+            if (pinnedRootPub is null || string.IsNullOrWhiteSpace(callerDevicePubB64))
+            {
+                return Results.Unauthorized();
+            }
+
+            PolicyVerificationResult verified = policyEngine.VerifyOffline(
+                req.SenderSignedPolicyJson, pinnedRootPub, callerMachineId, Convert.FromBase64String(callerDevicePubB64), commitClockGuard: false);
+            if (!verified.IsValid)
+            {
+                return Results.Json(new { message = verified.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            int changed = await leaves.UpsertIncomingRequestsAsync(req.Items.Select(x => new LeaveRequestEntity
+            {
+                Id = x.Id,
+                CompanyId = x.CompanyId,
+                EmployeeProfileId = x.EmployeeProfileId,
+                EmployeeCode = x.EmployeeCode,
+                EmployeeName = x.EmployeeName,
+                MachineId = x.MachineId,
+                RequestType = x.RequestType,
+                StartDateKey = x.StartDateKey,
+                EndDateKey = x.EndDateKey,
+                OvertimeHours = x.OvertimeHours,
+                Reason = x.Reason,
+                Status = x.Status,
+                ReviewedByName = x.ReviewedByName,
+                ReviewedAtUtc = x.ReviewedAtUtc,
+                ReviewNotes = x.ReviewNotes,
+                CreatedAtUtc = x.CreatedAtUtc,
+                UpdatedAtUtc = x.UpdatedAtUtc
+            }), ct).ConfigureAwait(false);
+
+            return Results.Ok(new { changed });
+        });
+
+        app.MapGet("/api/v1/collab/expenses", async (AccountingLedgerService ledger, CancellationToken ct) =>
+        {
+            IReadOnlyList<ExpenseRequestEntity> all = await ledger.GetAllExpensesForSyncAsync(ct).ConfigureAwait(false);
+            return Results.Ok(all.Select(x => new ExpenseRequestDto(
+                x.Id, x.CompanyId, x.RequesterMachineId, x.RequesterUsername, x.RequesterFullName,
+                x.RequestType, x.Category, x.AmountVnd, x.Description, x.ReceiptFileName, x.ReceiptVaultPath,
+                x.Status, x.ApprovedByName, x.ApprovedAtUtc, x.ReviewNotes, x.CreatedAtUtc, x.UpdatedAtUtc)).ToArray());
+        });
+
+        app.MapPost("/api/v1/collab/expenses/sync", async (
+            HttpContext http,
+            ExpenseRequestSyncBatchDto req,
+            LocalKeyStore keyStore,
+            PolicyEngine policyEngine,
+            AccountingLedgerService ledger,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            string callerDevicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            byte[]? pinnedRootPub = keyStore.LoadPinnedRootPublicKey();
+            if (pinnedRootPub is null || string.IsNullOrWhiteSpace(callerDevicePubB64))
+            {
+                return Results.Unauthorized();
+            }
+
+            PolicyVerificationResult verified = policyEngine.VerifyOffline(
+                req.SenderSignedPolicyJson, pinnedRootPub, callerMachineId, Convert.FromBase64String(callerDevicePubB64), commitClockGuard: false);
+            if (!verified.IsValid)
+            {
+                return Results.Json(new { message = verified.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            int changed = await ledger.UpsertIncomingExpensesAsync(req.Items.Select(x => new ExpenseRequestEntity
+            {
+                Id = x.Id,
+                CompanyId = x.CompanyId,
+                RequesterMachineId = x.RequesterMachineId,
+                RequesterUsername = x.RequesterUsername,
+                RequesterFullName = x.RequesterFullName,
+                RequestType = x.RequestType,
+                Category = x.Category,
+                AmountVnd = x.AmountVnd,
+                Description = x.Description,
+                ReceiptFileName = x.ReceiptFileName,
+                ReceiptVaultPath = null,
+                Status = x.Status,
+                ApprovedByName = x.ApprovedByName,
+                ApprovedAtUtc = x.ApprovedAtUtc,
+                ReviewNotes = x.ReviewNotes,
+                CreatedAtUtc = x.CreatedAtUtc,
+                UpdatedAtUtc = x.UpdatedAtUtc
+            }), ct).ConfigureAwait(false);
+
+            return Results.Ok(new { changed });
+        });
+
+        app.MapGet("/api/v1/collab/docs", async (SharedDocumentService docs, CancellationToken ct) =>
+        {
+            IReadOnlyList<SharedDocumentEntity> all = await docs.GetAllForSyncAsync(ct).ConfigureAwait(false);
+            return Results.Ok(all.Select(d => new SharedDocumentDto(
+                d.Id, d.CompanyId, d.Title, d.Category, d.Description, d.FileName,
+                d.FileSha256, d.FileSizeBytes, d.UploadedByMachineId, d.UploadedByName,
+                d.UploadedAtUtc, d.IsDeleted, d.UpdatedAtUtc)).ToArray());
+        });
+
+        app.MapPost("/api/v1/collab/docs/sync", async (
+            HttpContext http,
+            SharedDocumentSyncBatchDto req,
+            LocalKeyStore keyStore,
+            PolicyEngine policyEngine,
+            SharedDocumentService docs,
+            CancellationToken ct) =>
+        {
+            string callerMachineId = http.Items["EzDeviceMachineId"] as string ?? string.Empty;
+            string callerDevicePubB64 = http.Items["EzDevicePubKey"] as string ?? string.Empty;
+            byte[]? pinnedRootPub = keyStore.LoadPinnedRootPublicKey();
+            if (pinnedRootPub is null || string.IsNullOrWhiteSpace(callerDevicePubB64))
+            {
+                return Results.Unauthorized();
+            }
+
+            PolicyVerificationResult verified = policyEngine.VerifyOffline(
+                req.SenderSignedPolicyJson, pinnedRootPub, callerMachineId, Convert.FromBase64String(callerDevicePubB64), commitClockGuard: false);
+            if (!verified.IsValid)
+            {
+                return Results.Json(new { message = verified.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            int changed = await docs.UpsertIncomingDocumentsAsync(req.Items.Select(x => new SharedDocumentEntity
+            {
+                Id = x.Id,
+                CompanyId = x.CompanyId,
+                Title = x.Title,
+                Category = x.Category,
+                Description = x.Description,
+                FileName = x.FileName,
+                VaultRelativePath = null,
+                FileSha256 = x.FileSha256,
+                FileSizeBytes = x.FileSizeBytes,
+                UploadedByMachineId = x.UploadedByMachineId,
+                UploadedByName = x.UploadedByName,
+                UploadedAtUtc = x.UploadedAtUtc,
+                IsDeleted = x.IsDeleted,
+                UpdatedAtUtc = x.UpdatedAtUtc
+            }), ct).ConfigureAwait(false);
+
+            return Results.Ok(new { changed });
+        });
+
+        app.MapGet("/api/v1/collab/docs/{docId:guid}/download", async (
+            Guid docId,
+            IDbContextFactory<AppDbContext> appDbFactory,
+            ILocalStoragePaths paths,
+            HttpContext http,
+            CancellationToken ct) =>
+        {
+            await using AppDbContext db = await appDbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+            SharedDocumentEntity? doc = await db.SharedDocuments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == docId && !d.IsDeleted, ct)
+                .ConfigureAwait(false);
+
+            if (doc is null || string.IsNullOrWhiteSpace(doc.VaultRelativePath))
+            {
+                return Results.NotFound();
+            }
+
+            string full = Path.GetFullPath(Path.Combine(paths.VaultDirectory, doc.VaultRelativePath.Replace('/', Path.DirectorySeparatorChar)));
+            if (!File.Exists(full))
+            {
+                return Results.NotFound();
+            }
+
+            byte[] bytes = await File.ReadAllBytesAsync(full, ct).ConfigureAwait(false);
+            http.Response.Headers["X-Ez-Sha256"] = doc.FileSha256;
+            return Results.File(bytes, "application/octet-stream", doc.FileName);
         });
     }
 

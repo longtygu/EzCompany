@@ -71,7 +71,9 @@ public sealed partial class WelcomeDashboardViewModel : ObservableObject
     public ObservableCollection<RoleSubTabModel> RoleSubTabs { get; } = [];
 
     public IReadOnlyList<string> AvailablePriorities { get; } = WorkTaskPriorities.All;
+    public IReadOnlyList<string> TimelineCategoryFilterOptions { get; } = ["ALL", .. TimelineCategories.All];
 
+    [ObservableProperty] private string _timelineCategoryFilter = "ALL";
     [ObservableProperty] private string _greetingText = "Xin chào";
     [ObservableProperty] private string _userRoleAndCompanyText = string.Empty;
     [ObservableProperty] private string _solarDateText = string.Empty;
@@ -263,10 +265,17 @@ public sealed partial class WelcomeDashboardViewModel : ObservableObject
         }
     }
 
+    partial void OnTimelineCategoryFilterChanged(string value) => RebuildTimelineLayout();
+
     private void RebuildTimelineLayout()
     {
+        TimelinePlanEntity[] filteredPlans = string.IsNullOrWhiteSpace(TimelineCategoryFilter) ||
+                                             string.Equals(TimelineCategoryFilter, "ALL", StringComparison.OrdinalIgnoreCase)
+            ? TimelinePlans.ToArray()
+            : TimelinePlans.Where(p => string.Equals(p.Category, TimelineCategoryFilter, StringComparison.OrdinalIgnoreCase)).ToArray();
+
         TimelineLayoutResult layout = TimelineTrackLayoutEngine.BuildLayout(
-            TimelinePlans.ToArray(),
+            filteredPlans,
             _timelineAnchorDate,
             _timelineZoomMode,
             _timelineTrackCount,

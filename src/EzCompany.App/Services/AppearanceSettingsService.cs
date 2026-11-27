@@ -83,7 +83,8 @@ public sealed class AppearanceSettingsService : ObservableObject
             window,
             palette,
             Current.BackdropType,
-            Current.IsDarkMode);
+            Current.IsDarkMode,
+            forceOpaque: AppearancePaletteBuilder.IsSolid(Current));
     }
 
     public static AppearanceSettings Normalize(AppearanceSettings source)

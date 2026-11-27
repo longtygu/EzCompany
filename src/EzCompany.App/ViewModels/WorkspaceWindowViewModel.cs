@@ -6,6 +6,7 @@ using EzCompany.App.Services;
 using EzCompany.App.Views;
 using EzCompany.Core.Abstractions;
 using EzCompany.Core.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace EzCompany.App.ViewModels;
@@ -23,6 +24,7 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
     private readonly ILogger<WorkspaceWindowViewModel> _logger;
     private readonly ChatNotificationPopupService? _chatPopupService;
     private readonly ChatDockCoordinator? _chatDockCoordinator;
+    private readonly IDbContextFactory<AppDbContext>? _appDbFactory;
 
     private string? _pendingActionNavKey;
 
@@ -37,7 +39,8 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         CompanyBrandingService branding,
         ILogger<WorkspaceWindowViewModel> logger,
         ChatNotificationPopupService? chatPopupService = null,
-        ChatDockCoordinator? chatDockCoordinator = null)
+        ChatDockCoordinator? chatDockCoordinator = null,
+        IDbContextFactory<AppDbContext>? appDbFactory = null)
     {
         _session = session;
         _permissions = permissions;
@@ -50,6 +53,7 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         _logger = logger;
         _chatPopupService = chatPopupService;
         _chatDockCoordinator = chatDockCoordinator;
+        _appDbFactory = appDbFactory;
 
         if (_chatDockCoordinator is not null)
         {
@@ -130,6 +134,27 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
             UserSubtitle = $"{evt.FullName} (@{evt.Username}) • {CompanyRoles.FormatRolesBilingual(evt.Role)}";
         });
         _eventBus.Subscribe<CompanyLogoUpdatedEvent>(_ => LogoRefreshRequested?.Invoke(this, EventArgs.Empty));
+        _eventBus.Subscribe<TaskDeadlineReminderEvent>(evt =>
+        {
+            string tag = evt.IsOverdue ? "⏰ QUÁ HẠN" : "⏰ SẮP ĐẾN HẠN";
+            ActiveNoticeBanner = $"{tag}: '{evt.Title}' (Hạn {evt.DueDateUtc.ToLocalTime():HH:mm dd/MM})";
+            _pendingActionNavKey = "core.tasks";
+            HasNoticeAction = true;
+        });
+        _eventBus.Subscribe<LeaveRequestUpdatedEvent>(evt =>
+        {
+            ActiveNoticeBanner = $"📝 Đơn xin phép / OT [{evt.Status}] — {evt.EmployeeName}";
+            _pendingActionNavKey = _session.IsDirectorNode ? "director.dashboard" : "core.requests";
+            HasNoticeAction = true;
+            _ = RefreshDirectorBadgeAsync();
+        });
+        _eventBus.Subscribe<ExpenseRequestUpdatedEvent>(evt =>
+        {
+            ActiveNoticeBanner = $"💳 Đề xuất tạm ứng / thanh toán [{evt.Status}] — {evt.RequesterName}";
+            _pendingActionNavKey = _session.IsDirectorNode ? "director.dashboard" : "core.requests";
+            HasNoticeAction = true;
+            _ = RefreshDirectorBadgeAsync();
+        });
     }
 
     public ObservableCollection<NavigationGroupModel> NavigationGroups { get; } = [];
@@ -163,6 +188,31 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
         UserSubtitle = $"{_session.FullName} (@{_session.Username}) • {CompanyRoles.FormatRolesBilingual(_session.Role)}";
         await RefreshCompanyLogoAsync();
         RebuildNavigation();
+        await RefreshDirectorBadgeAsync();
+    }
+
+    public async Task RefreshDirectorBadgeAsync()
+    {
+        if (!_session.IsDirectorNode || _appDbFactory is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using AppDbContext db = await _appDbFactory.CreateDbContextAsync();
+            int pendingResets = await db.PasswordResetRequests.AsNoTracking().CountAsync(x => x.State == "Pending");
+            int pendingLeaves = await db.LeaveRequests.AsNoTracking().CountAsync(x => x.Status == LeaveRequestStatuses.Pending);
+            int pendingExpenses = await db.ExpenseRequests.AsNoTracking().CountAsync(x => x.Status == ExpenseRequestStatuses.Pending);
+            NavigationItemModel? dirNav = FindNavItemByKey("director.dashboard");
+            if (dirNav is not null)
+            {
+                dirNav.BadgeCount = pendingResets + pendingLeaves + pendingExpenses;
+            }
+        }
+        catch
+        {
+        }
     }
 
     public async Task RefreshCompanyLogoAsync()
@@ -220,8 +270,24 @@ public sealed partial class WorkspaceWindowViewModel : ObservableObject
             {
                 Key = "core.tasks",
                 Title = "Giao việc & Bàn giao",
-                Subtitle = "Đính kèm file, Thông báo & Lịch sử",
+                Subtitle = "Đính kèm file, Checklist & Lặp lại",
                 CreateContent = () => _services.GetService(typeof(TaskManagementView))!
+            });
+
+            AddNavItem(commonGroup, new NavigationItemModel
+            {
+                Key = "core.requests",
+                Title = "Đơn từ nội bộ",
+                Subtitle = "Xin nghỉ phép, Tăng ca & Tạm ứng",
+                CreateContent = () => _services.GetService(typeof(EmployeeRequestsView))!
+            });
+
+            AddNavItem(commonGroup, new NavigationItemModel
+            {
+                Key = "core.shareddocs",
+                Title = "Kho tài liệu LAN",
+                Subtitle = "Quy chế, Biểu mẫu dùng chung",
+                CreateContent = () => _services.GetService(typeof(SharedDocumentsView))!
             });
         }
 

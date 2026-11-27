@@ -9,6 +9,10 @@ using Xunit;
 
 namespace EzCompany.Tests;
 
+[CollectionDefinition("WpfUiSta")]
+public sealed class WpfUiStaCollection;
+
+[Collection("WpfUiSta")]
 public sealed class AppearancePaletteTests
 {
     [Fact]
@@ -57,7 +61,7 @@ public sealed class AppearancePaletteTests
     }
 
     [Fact]
-    public void Build_MicaBackdropAtFullOpacity_KeepsTranslucentWindowSurface()
+    public void Build_MicaBackdropAtZeroTransparency_IsFullyOpaque()
     {
         AppearancePalette palette = AppearancePaletteBuilder.Build(new AppearanceSettings
         {
@@ -65,7 +69,8 @@ public sealed class AppearancePaletteTests
             BackdropType = "Mica"
         });
 
-        Assert.True(palette.WindowSurface.A < 255);
+        Assert.Equal(255, palette.WindowSurface.A);
+        Assert.Equal(255, palette.Panel.A);
     }
 
     [Fact]
@@ -158,7 +163,7 @@ public sealed class AppearancePaletteTests
         Assert.Equal(Colors.Transparent, compBg);
         Assert.Equal(new Thickness(-1), glass);
         Assert.Equal(0, exStyle & 0x00080000);
-        Assert.InRange(blurSurfaceAlpha, (byte)45, (byte)47);
+        Assert.InRange(blurSurfaceAlpha, (byte)68, (byte)70);
         Assert.InRange(noneSurfaceAlpha, (byte)101, (byte)103);
         Assert.Contains("Blur", blurMaterial, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Đặc", noneMaterial, StringComparison.OrdinalIgnoreCase);

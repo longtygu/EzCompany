@@ -148,6 +148,89 @@
                     <ui:Button Appearance="Primary" Content="Đóng dấu Watermark &amp; Xuất PDF" Command="{Binding ExecuteWatermarkCommand}" />
                 </StackPanel>
             </TabItem>
+
+            <!-- Tab 5: Images to PDF -->
+            <TabItem Header="5. Ảnh → PDF">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <WrapPanel Grid.Row="0" Margin="0,0,0,10">
+                        <ui:Button Appearance="Primary" Content="Thêm ảnh (PNG/JPG)..." Command="{Binding AddImagesToPdfCommand}" Margin="0,0,8,0" />
+                        <ui:Button Content="Xóa ảnh đang chọn" Command="{Binding RemoveSelectedImageToPdfCommand}" Margin="0,0,14,0" />
+                        <CheckBox Content="Căn vừa khổ giấy A4" IsChecked="{Binding ImageFitToA4}" VerticalAlignment="Center" />
+                    </WrapPanel>
+
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding ImageToPdfFiles}"
+                             SelectedItem="{Binding SelectedImageToPdfFile}" />
+
+                    <ui:Button Grid.Row="2"
+                               Margin="0,12,0,0"
+                               Appearance="Primary"
+                               Content="Xuất tệp PDF từ danh sách ảnh"
+                               Command="{Binding ExecuteImagesToPdfCommand}" />
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 6: Stamp Signature / Seal Image -->
+            <TabItem Header="6. Chèn Chữ ký / Con dấu">
+                <StackPanel Margin="12" MaxWidth="660" HorizontalAlignment="Left">
+                    <TextBlock Text="Tệp PDF gốc" Margin="0,0,0,4" />
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Grid.Column="0" Text="{Binding StampInputPdfPath}" IsReadOnly="True" />
+                        <ui:Button Grid.Column="2" Content="Chọn PDF..." Command="{Binding BrowseStampPdfCommand}" />
+                    </Grid>
+
+                    <TextBlock Text="Ảnh chữ ký / con dấu (khuyến nghị PNG nền trong suốt)" Margin="0,0,0,4" />
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Grid.Column="0" Text="{Binding StampImagePath}" IsReadOnly="True" />
+                        <ui:Button Grid.Column="2" Content="Chọn ảnh..." Command="{Binding BrowseStampImageCommand}" />
+                    </Grid>
+
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Trang số" />
+                            <ui:TextBox Text="{Binding StampPageNumber, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="{Binding StampXPercent, StringFormat='Vị trí X: {0:F0}%'}" />
+                            <Slider Minimum="0" Maximum="90" Value="{Binding StampXPercent}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="{Binding StampYPercent, StringFormat='Vị trí Y: {0:F0}%'}" />
+                            <Slider Minimum="0" Maximum="90" Value="{Binding StampYPercent}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="6">
+                            <TextBlock Text="{Binding StampWidthPercent, StringFormat='Cỡ rộng: {0:F0}%'}" />
+                            <Slider Minimum="5" Maximum="60" Value="{Binding StampWidthPercent}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <ui:Button Appearance="Primary" Content="Chèn ảnh Chữ ký / Con dấu &amp; Lưu PDF" Command="{Binding ExecuteStampImageCommand}" />
+                </StackPanel>
+            </TabItem>
         </TabControl>
     </Grid>
 </UserControl>

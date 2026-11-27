@@ -156,6 +156,10 @@ public sealed class PeerCollabSyncService : BackgroundService
             try
             {
                 _ = await _collabClient.SyncTimelineWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                _ = await _collabClient.SyncAvatarsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                _ = await _collabClient.SyncLeaveRequestsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                _ = await _collabClient.SyncExpensesWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                _ = await _collabClient.SyncSharedDocumentsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
             }
             catch
             {
@@ -199,6 +203,10 @@ public sealed class PeerCollabSyncService : BackgroundService
             try
             {
                 timelineChanges += await _collabClient.SyncTimelineWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                _ = await _collabClient.SyncAvatarsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                _ = await _collabClient.SyncLeaveRequestsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                _ = await _collabClient.SyncExpensesWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
+                _ = await _collabClient.SyncSharedDocumentsWithPeerAsync(peer.Endpoint, ct).ConfigureAwait(false);
             }
             catch
             {

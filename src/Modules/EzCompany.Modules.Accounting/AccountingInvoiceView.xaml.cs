@@ -8,6 +8,7 @@ public partial class AccountingInvoiceView : UserControl
     {
         DataContext = viewModel;
         InitializeComponent();
+        viewModel.RefreshRequested += (_, _) => Dispatcher.InvokeAsync(async () => await viewModel.LoadSavedAsync());
         Loaded += async (_, _) => await viewModel.LoadSavedAsync();
     }
 }

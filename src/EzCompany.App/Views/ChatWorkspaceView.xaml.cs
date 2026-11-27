@@ -1,9 +1,12 @@
+using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using EzCompany.App.Services;
 using EzCompany.App.ViewModels;
+using EzCompany.Core.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EzCompany.App.Views;
@@ -40,6 +43,10 @@ public partial class ChatWorkspaceView : UserControl
         {
             Dispatcher.InvokeAsync(async () => await _viewModel.PollIncrementalAsync());
         };
+        _viewModel.AvatarRefreshRequested += (_, _) =>
+        {
+            Dispatcher.InvokeAsync(async () => await _viewModel.RefreshPeerPresenceAsync());
+        };
         _viewModel.ScrollToBottomRequested += (_, _) =>
         {
             Dispatcher.InvokeAsync(() => MessageScrollViewer.ScrollToEnd());
@@ -47,6 +54,14 @@ public partial class ChatWorkspaceView : UserControl
         _viewModel.OpenCreateGroupWindowRequested += async (_, _) =>
         {
             await OpenCreateGroupWindowAsync();
+        };
+        _viewModel.OpenManageGroupWindowRequested += async (_, _) =>
+        {
+            await OpenManageGroupWindowAsync();
+        };
+        _viewModel.PreviewImageRequested += async (_, msgItem) =>
+        {
+            await OpenImagePreviewWindowAsync(msgItem);
         };
         _viewModel.ToggleDetachRequested += (_, _) =>
         {
@@ -112,6 +127,77 @@ public partial class ChatWorkspaceView : UserControl
         {
             await _viewModel.CreateGroupWithMembersAsync(dialog.CreatedGroupName, dialog.SelectedMembers);
         }
+    }
+
+    private async Task OpenManageGroupWindowAsync()
+    {
+        if (_viewModel.SelectedConversation is null)
+        {
+            return;
+        }
+
+        string[] currentIds = [];
+        try
+        {
+            currentIds = JsonSerializer.Deserialize<string[]>(_viewModel.SelectedConversation.MemberMachineIdsJson) ?? [];
+        }
+        catch
+        {
+        }
+
+        ManageChatGroupWindow dialog = _services.GetRequiredService<ManageChatGroupWindow>();
+        Window? owner = Window.GetWindow(this) ?? Application.Current?.MainWindow;
+        if (owner is not null)
+        {
+            dialog.Owner = owner;
+        }
+
+        dialog.Initialize(_viewModel.SelectedConversation.Name, currentIds, _viewModel.PeerPresenceItems);
+        if (dialog.ShowDialog() == true)
+        {
+            await _viewModel.UpdateGroupMembersAsync(dialog.UpdatedGroupName, dialog.SelectedMembers);
+        }
+    }
+
+    private async Task OpenImagePreviewWindowAsync(ChatMessageDisplayItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.AttachmentVaultPath))
+        {
+            return;
+        }
+
+        ILocalStoragePaths paths = _services.GetRequiredService<ILocalStoragePaths>();
+        AppearanceSettingsService appearance = _services.GetRequiredService<AppearanceSettingsService>();
+        string fullPath = Path.GetFullPath(Path.Combine(
+            paths.VaultDirectory,
+            item.AttachmentVaultPath.Replace('/', Path.DirectorySeparatorChar)));
+
+        if (!File.Exists(fullPath))
+        {
+            return;
+        }
+
+        var timelineItem = new SnapshotTimelineItem
+        {
+            Id = item.Id,
+            MachineId = item.SenderMachineId,
+            Username = item.SenderFullName,
+            CapturedAtUtc = item.SentAtUtc,
+            Caption = $"{item.SenderFullName} • {item.AttachmentFileName}"
+        };
+
+        var vm = new SnapshotViewerViewModel(
+            [timelineItem],
+            0,
+            _ => File.ReadAllBytesAsync(fullPath),
+            Path.Combine(paths.VaultDirectory, "ChatExports"));
+
+        var win = new SnapshotViewerWindow(vm, appearance)
+        {
+            Owner = Window.GetWindow(this) ?? Application.Current?.MainWindow
+        };
+        win.Show();
+        await Task.CompletedTask;
     }
 
     private async void MessageInputBox_PreviewKeyDown(object sender, KeyEventArgs e)

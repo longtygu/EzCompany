@@ -31,6 +31,11 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<ChatService>();
         services.AddSingleton<TimelinePlanService>();
         services.AddSingleton<HrAttendanceService>();
+        services.AddSingleton<UserAvatarService>();
+        services.AddSingleton<LeaveRequestService>();
+        services.AddSingleton<AccountingLedgerService>();
+        services.AddSingleton<ContractRegistryService>();
+        services.AddSingleton<SharedDocumentService>();
         return services;
     }
 }

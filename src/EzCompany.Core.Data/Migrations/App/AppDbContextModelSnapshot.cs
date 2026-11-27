@@ -99,6 +99,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
         modelBuilder.Entity("EzCompany.Core.Data.Entities.LocalUserEntity", b =>
         {
             b.Property<Guid>("UserId").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<string>("AvatarBase64").HasColumnType("TEXT");
+            b.Property<long?>("AvatarUpdatedAtUtc").HasColumnType("INTEGER");
             b.Property<Guid>("CompanyId").HasColumnType("TEXT");
             b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
             b.Property<string>("FullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
@@ -132,6 +134,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
         {
             b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
             b.Property<string>("AppVersion").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("AvatarBase64").HasColumnType("TEXT");
+            b.Property<long?>("AvatarUpdatedAtUtc").HasColumnType("INTEGER");
             b.Property<Guid>("CompanyId").HasColumnType("TEXT");
             b.Property<string>("CurrentPolicyJson").IsRequired().HasColumnType("TEXT");
             b.Property<long>("CurrentPolicyVersion").HasColumnType("INTEGER");
@@ -210,8 +214,10 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("PendingSyncAction").HasColumnType("TEXT");
             b.Property<string>("PendingSyncTargetMachineId").HasColumnType("TEXT");
             b.Property<string>("Priority").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("RecurrenceRule").IsRequired().HasColumnType("TEXT");
             b.Property<string>("ReviewNotes").IsRequired().HasColumnType("TEXT");
             b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("SubtasksJson").IsRequired().HasColumnType("TEXT");
             b.Property<string>("TaskKind").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
             b.Property<string>("Title").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
             b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
@@ -270,6 +276,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid?>("LinkedTaskId").HasColumnType("TEXT");
             b.Property<string>("MessageType").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
             b.Property<string>("PendingSyncTargetsJson").HasColumnType("TEXT");
+            b.Property<string>("ReplyPreviewText").HasColumnType("TEXT");
+            b.Property<Guid?>("ReplyToMessageId").HasColumnType("TEXT");
             b.Property<string>("SenderFullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
             b.Property<string>("SenderMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
             b.Property<string>("SenderUsername").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
@@ -341,6 +349,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("EmployeeCode").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
             b.Property<string>("EmployeeName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
             b.Property<Guid>("EmployeeProfileId").HasColumnType("TEXT");
+            b.Property<bool>("IsDeleted").HasColumnType("INTEGER");
             b.Property<bool>("IsManualEntry").HasColumnType("INTEGER");
             b.Property<string>("MachineId").IsRequired().HasColumnType("TEXT");
             b.Property<string>("Notes").IsRequired().HasColumnType("TEXT");
@@ -353,6 +362,126 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("DateKey");
             b.HasIndex("EmployeeProfileId", "DateKey");
             b.ToTable("AttendanceRecords");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.LeaveRequestEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("EmployeeCode").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+            b.Property<string>("EmployeeName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<Guid>("EmployeeProfileId").HasColumnType("TEXT");
+            b.Property<string>("EndDateKey").IsRequired().HasMaxLength(16).HasColumnType("TEXT");
+            b.Property<string>("MachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<double>("OvertimeHours").HasColumnType("REAL");
+            b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("RequestType").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("ReviewNotes").IsRequired().HasColumnType("TEXT");
+            b.Property<long?>("ReviewedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("ReviewedByName").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("StartDateKey").IsRequired().HasMaxLength(16).HasColumnType("TEXT");
+            b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("MachineId");
+            b.HasIndex("Status");
+            b.HasIndex("UpdatedAtUtc");
+            b.ToTable("LeaveRequests");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.CashbookEntryEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<decimal>("AmountVnd").HasColumnType("TEXT");
+            b.Property<string>("Category").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("CreatedByName").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Description").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("EntryDateKey").IsRequired().HasMaxLength(16).HasColumnType("TEXT");
+            b.Property<string>("EntryType").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<Guid?>("LinkedExpenseRequestId").HasColumnType("TEXT");
+            b.Property<string>("PaymentMethod").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("ReferenceCode").IsRequired().HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("EntryDateKey");
+            b.HasIndex("EntryType");
+            b.ToTable("CashbookEntries");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.ExpenseRequestEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<decimal>("AmountVnd").HasColumnType("TEXT");
+            b.Property<long?>("ApprovedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("ApprovedByName").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Category").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("Description").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("ReceiptFileName").HasColumnType("TEXT");
+            b.Property<string>("ReceiptVaultPath").HasColumnType("TEXT");
+            b.Property<string>("RequestType").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("RequesterFullName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<string>("RequesterMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("RequesterUsername").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("ReviewNotes").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.HasKey("Id");
+            b.HasIndex("RequesterMachineId");
+            b.HasIndex("Status");
+            b.HasIndex("UpdatedAtUtc");
+            b.ToTable("ExpenseRequests");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.ContractRecordEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<string>("ContractNumber").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+            b.Property<string>("ContractType").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("CounterpartyName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<long>("CreatedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("ExpiryDateKey").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("FileName").HasColumnType("TEXT");
+            b.Property<string>("Notes").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("OwnerName").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("SignedDateKey").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("StartDateKey").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("Status").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+            b.Property<string>("Title").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.Property<decimal>("ValueVnd").HasColumnType("TEXT");
+            b.Property<string>("VaultFilePath").HasColumnType("TEXT");
+            b.HasKey("Id");
+            b.HasIndex("ExpiryDateKey");
+            b.HasIndex("Status");
+            b.ToTable("ContractRecords");
+        });
+
+        modelBuilder.Entity("EzCompany.Core.Data.Entities.SharedDocumentEntity", b =>
+        {
+            b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("TEXT");
+            b.Property<string>("Category").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+            b.Property<Guid>("CompanyId").HasColumnType("TEXT");
+            b.Property<string>("Description").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("FileName").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<string>("FileSha256").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<long>("FileSizeBytes").HasColumnType("INTEGER");
+            b.Property<bool>("IsDeleted").HasColumnType("INTEGER");
+            b.Property<string>("Title").IsRequired().HasMaxLength(256).HasColumnType("TEXT");
+            b.Property<long>("UpdatedAtUtc").HasColumnType("INTEGER");
+            b.Property<long>("UploadedAtUtc").HasColumnType("INTEGER");
+            b.Property<string>("UploadedByMachineId").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+            b.Property<string>("UploadedByName").IsRequired().HasColumnType("TEXT");
+            b.Property<string>("VaultRelativePath").HasColumnType("TEXT");
+            b.HasKey("Id");
+            b.HasIndex("Category");
+            b.HasIndex("UpdatedAtUtc");
+            b.ToTable("SharedDocuments");
         });
     }
 }

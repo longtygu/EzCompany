@@ -44,6 +44,8 @@ public static class LanAgentServiceCollectionExtensions
 
         services.AddSingleton<DirectorFleetSyncService>();
         services.AddHostedService(sp => sp.GetRequiredService<DirectorFleetSyncService>());
+        services.AddSingleton<DirectorAutoBackupService>();
+        services.AddHostedService(sp => sp.GetRequiredService<DirectorAutoBackupService>());
 
         return services;
     }

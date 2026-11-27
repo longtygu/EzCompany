@@ -247,6 +247,108 @@ public sealed class LocalPdfStudioService
             .ConfigureAwait(false);
     }
 
+    public async Task<PdfOperationResult> ConvertImagesToPdfAsync(
+        IReadOnlyList<string> imagePaths,
+        string outputPath,
+        bool fitToA4 = true,
+        bool saveToVault = false,
+        CancellationToken ct = default)
+    {
+        if (imagePaths is null || imagePaths.Count == 0)
+        {
+            throw new ArgumentException("Vui lòng chọn ít nhất 1 tệp ảnh.", nameof(imagePaths));
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        using var doc = new PdfDocument();
+
+        foreach (string imgPath in imagePaths)
+        {
+            if (!File.Exists(imgPath))
+            {
+                throw new FileNotFoundException("Không tìm thấy tệp ảnh.", imgPath);
+            }
+
+            PdfPage page = doc.AddPage();
+            using XImage xImg = XImage.FromFile(imgPath);
+            if (fitToA4)
+            {
+                page.Size = PdfSharp.PageSize.A4;
+                double maxW = page.Width.Point - 36;
+                double maxH = page.Height.Point - 36;
+                double scale = Math.Min(maxW / xImg.PointWidth, maxH / xImg.PointHeight);
+                double drawW = xImg.PointWidth * scale;
+                double drawH = xImg.PointHeight * scale;
+                double x = (page.Width.Point - drawW) / 2.0;
+                double y = (page.Height.Point - drawH) / 2.0;
+                using XGraphics gfx = XGraphics.FromPdfPage(page);
+                gfx.DrawImage(xImg, x, y, drawW, drawH);
+            }
+            else
+            {
+                page.Width = XUnit.FromPoint(Math.Max(72, xImg.PointWidth));
+                page.Height = XUnit.FromPoint(Math.Max(72, xImg.PointHeight));
+                using XGraphics gfx = XGraphics.FromPdfPage(page);
+                gfx.DrawImage(xImg, 0, 0, page.Width.Point, page.Height.Point);
+            }
+        }
+
+        int pageCount = doc.PageCount;
+        doc.Save(outputPath);
+        return await RecordOperationAsync("ImagesToPdf", imagePaths, outputPath, pageCount, saveToVault, $"Images={imagePaths.Count}", ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<PdfOperationResult> StampImageOnPdfAsync(
+        string inputPdfPath,
+        string imagePath,
+        string outputPath,
+        int pageNumber,
+        double xPercent,
+        double yPercent,
+        double widthPercent,
+        bool saveToVault = false,
+        CancellationToken ct = default)
+    {
+        if (!File.Exists(inputPdfPath))
+        {
+            throw new FileNotFoundException("Không tìm thấy tệp PDF nguồn.", inputPdfPath);
+        }
+
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException("Không tìm thấy tệp ảnh chữ ký / con dấu.", imagePath);
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        using PdfDocument inputDoc = PdfReader.Open(inputPdfPath, PdfDocumentOpenMode.Import);
+        using var outputDoc = new PdfDocument();
+        for (int i = 0; i < inputDoc.PageCount; i++)
+        {
+            outputDoc.AddPage(inputDoc.Pages[i]);
+        }
+
+        int targetIndex = Math.Clamp(pageNumber - 1, 0, Math.Max(0, outputDoc.PageCount - 1));
+        PdfPage targetPage = outputDoc.Pages[targetIndex];
+        using XImage stamp = XImage.FromFile(imagePath);
+
+        double drawW = Math.Clamp(widthPercent, 3.0, 80.0) / 100.0 * targetPage.Width.Point;
+        double aspect = stamp.PointWidth > 0 ? stamp.PointHeight / stamp.PointWidth : 1.0;
+        double drawH = drawW * aspect;
+        double drawX = Math.Clamp(xPercent, 0.0, 95.0) / 100.0 * targetPage.Width.Point;
+        double drawY = Math.Clamp(yPercent, 0.0, 95.0) / 100.0 * targetPage.Height.Point;
+
+        using (XGraphics gfx = XGraphics.FromPdfPage(targetPage, XGraphicsPdfPageOptions.Append))
+        {
+            gfx.DrawImage(stamp, drawX, drawY, drawW, drawH);
+        }
+
+        int pageCount = outputDoc.PageCount;
+        outputDoc.Save(outputPath);
+        return await RecordOperationAsync("StampImage", [inputPdfPath, imagePath], outputPath, pageCount, saveToVault, $"Page={targetIndex + 1}", ct)
+            .ConfigureAwait(false);
+    }
+
     private string BuildWatermarkText(PdfWatermarkOptions options)
     {
         var parts = new List<string>();

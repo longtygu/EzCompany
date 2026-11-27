@@ -64,13 +64,20 @@ public sealed class CustomStickerViewItem
 
 public sealed partial class ChatConversationListItem : ObservableObject
 {
-    [ObservableProperty] private ChatConversationEntity _entity = null!;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Name))]
+    [NotifyPropertyChangedFor(nameof(ConversationType))]
+    [NotifyPropertyChangedFor(nameof(PinnedTaskSummary))]
+    [NotifyPropertyChangedFor(nameof(UpdatedAtUtc))]
+    private ChatConversationEntity _entity = null!;
 
     public Guid Id => Entity.Id;
     public string Name => Entity.Name;
     public string ConversationType => Entity.ConversationType;
+    public string MemberMachineIdsJson => Entity.MemberMachineIdsJson;
     public string? PinnedTaskSummary => Entity.PinnedTaskSummary;
     public DateTimeOffset UpdatedAtUtc => Entity.UpdatedAtUtc;
+    public bool IsGroupConversation => string.Equals(Entity.ConversationType, "Group", StringComparison.OrdinalIgnoreCase);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUnread))]
@@ -100,13 +107,39 @@ public sealed partial class ChatMessageDisplayItem : ObservableObject
     private string? _attachmentVaultPath;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasInlineImage))]
+    private BitmapImage? _inlineImage;
+
+    [ObservableProperty]
     private BitmapImage? _stickerImage;
+
+    public Guid? ReplyToMessageId { get; init; }
+    public string? ReplyPreviewText { get; init; }
+    public bool HasReplyPreview => !string.IsNullOrWhiteSpace(ReplyPreviewText);
 
     public bool IsOtherMessage => !IsOwnMessage;
     public bool IsSticker => string.Equals(MessageType, "Sticker", StringComparison.OrdinalIgnoreCase);
     public bool HasAttachment => !string.IsNullOrWhiteSpace(AttachmentFileName);
     public bool HasFileAttachment => HasAttachment && !IsSticker;
+    public bool HasInlineImage => InlineImage is not null;
+    public bool IsImageAttachment => HasFileAttachment && IsImageFileName(AttachmentFileName);
     public bool NeedsReverseDownload => HasAttachment && string.IsNullOrWhiteSpace(AttachmentVaultPath);
+
+    public static bool IsImageFileName(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        string ext = Path.GetExtension(fileName);
+        return ext.Equals(".png", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".webp", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".gif", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposable
@@ -117,10 +150,12 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
     private readonly LanCollaborationClient _collabClient;
     private readonly PeerCollabSyncService _collabSync;
     private readonly CustomStickerService _stickerService;
+    private readonly UserAvatarService _avatars;
     private readonly ILocalStoragePaths _paths;
     private readonly IEventBus _eventBus;
     private readonly ChatNotificationPopupService? _popupService;
     private readonly IDisposable _chatSubscription;
+    private readonly IDisposable _avatarSubscription;
     private readonly SemaphoreSlim _pollLock = new(1, 1);
 
     private DateTimeOffset? _lastGlobalActivityUtc;
@@ -135,6 +170,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         LanCollaborationClient collabClient,
         PeerCollabSyncService collabSync,
         CustomStickerService stickerService,
+        UserAvatarService avatars,
         ILocalStoragePaths paths,
         IEventBus eventBus,
         ChatNotificationPopupService? popupService = null)
@@ -145,16 +181,20 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         _collabClient = collabClient;
         _collabSync = collabSync;
         _stickerService = stickerService;
+        _avatars = avatars;
         _paths = paths;
         _eventBus = eventBus;
         _popupService = popupService;
 
         _chatSubscription = _eventBus.Subscribe<ChatMessageReceivedEvent>(_ =>
             RefreshRequested?.Invoke(this, EventArgs.Empty));
+        _avatarSubscription = _eventBus.Subscribe<UserAvatarUpdatedEvent>(_ =>
+            AvatarRefreshRequested?.Invoke(this, EventArgs.Empty));
     }
 
     public ObservableCollection<ChatConversationListItem> Conversations { get; } = [];
     public ObservableCollection<ChatMessageDisplayItem> Messages { get; } = [];
+    public ObservableCollection<ChatMessageDisplayItem> VisibleMessages { get; } = [];
     public ObservableCollection<ChatPeerPresenceItem> PeerPresenceItems { get; } = [];
     public ObservableCollection<ChatPeerPresenceItem> FilteredPeerSearchResults { get; } = [];
     public ObservableCollection<WorkTaskEntity> PinnableTasks { get; } = [];
@@ -167,8 +207,26 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
     [ObservableProperty] private WorkTaskEntity? _selectedTaskToPin;
     [ObservableProperty] private string _messageDraft = string.Empty;
     [ObservableProperty] private string _draftAttachmentPath = string.Empty;
+    [ObservableProperty] private string _messageSearchQuery = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasReplyingToMessage))]
+    [NotifyPropertyChangedFor(nameof(ReplyingToPreview))]
+    private ChatMessageDisplayItem? _replyingToMessage;
+    public bool HasReplyingToMessage => ReplyingToMessage is not null;
+    public string ReplyingToPreview => ReplyingToMessage is null
+        ? string.Empty
+        : $"Đang trả lời {ReplyingToMessage.SenderFullName}: {(string.IsNullOrWhiteSpace(ReplyingToMessage.Content) ? ReplyingToMessage.AttachmentFileName : ReplyingToMessage.Content)}";
+
     [ObservableProperty] private string _statusBanner = string.Empty;
     [ObservableProperty] private bool _isStickerTrayOpen;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLanDisconnected))]
+    private bool _isLanConnected;
+
+    public bool IsLanDisconnected => !IsLanConnected;
+
+    [ObservableProperty] private string _connectionStatusText = "● Đang kiểm tra kết nối...";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DetachButtonText))]
@@ -177,9 +235,12 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
     public string DetachButtonText => IsDetachedWindow ? "↙ Gắn về cửa sổ chính" : "↗ Tách cửa sổ";
 
     public event EventHandler? RefreshRequested;
+    public event EventHandler? AvatarRefreshRequested;
     public event EventHandler? ScrollToBottomRequested;
     public event EventHandler? OpenCreateGroupWindowRequested;
+    public event EventHandler? OpenManageGroupWindowRequested;
     public event EventHandler? ToggleDetachRequested;
+    public event EventHandler<ChatMessageDisplayItem>? PreviewImageRequested;
 
     [RelayCommand]
     public async Task RefreshAllAsync()
@@ -253,12 +314,24 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
 
     public async Task RefreshPeerPresenceAsync()
     {
-        IReadOnlyList<PeerDirectoryEntryDto> peers = await _taskClient.GetCompanyPeerDirectoryAsync();
+        IReadOnlyList<PeerDirectoryEntryDto> peers;
+        try
+        {
+            peers = await _taskClient.GetCompanyPeerDirectoryAsync();
+        }
+        catch
+        {
+            UpdateConnectionState(directoryOk: false, onlinePeers: 0, totalPeers: PeerPresenceItems.Count);
+            return;
+        }
+
         PeerDirectoryEntryDto[] remotePeers = peers
             .Where(x => !string.Equals(x.MachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(x => x.IsOnline)
             .ThenBy(x => x.FullName)
             .ToArray();
+
+        Dictionary<string, byte[]> avatarMap = await _avatars.GetAvatarMapAsync();
 
         var existingById = PeerPresenceItems.ToDictionary(p => p.MachineId, StringComparer.OrdinalIgnoreCase);
         bool setChanged = existingById.Count != remotePeers.Length ||
@@ -271,6 +344,14 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
                 ChatPeerPresenceItem item = existingById[p.MachineId];
                 item.IsOnline = p.IsOnline;
                 item.Endpoint = p.Endpoint;
+                if (avatarMap.TryGetValue(p.MachineId, out byte[]? avBytes))
+                {
+                    item.AvatarImage ??= LoadAvatarFrozen(avBytes);
+                }
+                else
+                {
+                    item.AvatarImage = null;
+                }
             }
         }
         else
@@ -278,6 +359,9 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
             PeerPresenceItems.Clear();
             foreach (PeerDirectoryEntryDto p in remotePeers)
             {
+                BitmapImage? avBmp = avatarMap.TryGetValue(p.MachineId, out byte[]? avBytes)
+                    ? LoadAvatarFrozen(avBytes)
+                    : null;
                 PeerPresenceItems.Add(new ChatPeerPresenceItem
                 {
                     MachineId = p.MachineId,
@@ -288,7 +372,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
                     RoleBilingual = CompanyRoles.FormatRolesBilingual(p.Role),
                     Endpoint = p.Endpoint,
                     IsOnline = p.IsOnline,
-                    AvatarImage = null
+                    AvatarImage = avBmp
                 });
             }
 
@@ -297,9 +381,82 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
 
         int onlineCount = PeerPresenceItems.Count(p => p.IsOnline);
         OnlinePeersSummary = $"{onlineCount}/{PeerPresenceItems.Count} online";
+        UpdateConnectionState(directoryOk: true, onlinePeers: onlineCount, totalPeers: PeerPresenceItems.Count);
+    }
+
+    private void UpdateConnectionState(bool directoryOk, int onlinePeers, int totalPeers)
+    {
+        bool networkAvailable = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
+        (bool isConnected, string text) = ComputeConnectionState(networkAvailable, directoryOk, onlinePeers, totalPeers);
+        IsLanConnected = isConnected;
+        ConnectionStatusText = text;
+    }
+
+    public static (bool IsConnected, string Text) ComputeConnectionState(
+        bool networkAvailable,
+        bool directoryOk,
+        int onlinePeers,
+        int totalPeers)
+    {
+        if (!networkAvailable)
+        {
+            return (false, "● Mất kết nối mạng");
+        }
+
+        if (!directoryOk)
+        {
+            return (false, "● Mất kết nối LAN");
+        }
+
+        if (onlinePeers <= 0)
+        {
+            return (false, totalPeers == 0
+                ? "● Mất kết nối — chưa có máy nào trong LAN"
+                : $"● Mất kết nối — 0/{totalPeers} máy online");
+        }
+
+        return (true, $"● Đã kết nối LAN • {onlinePeers}/{totalPeers} máy online");
     }
 
     partial void OnPeerSearchQueryChanged(string value) => UpdatePeerSearchFilter();
+    partial void OnMessageSearchQueryChanged(string value) => RebuildVisibleMessages();
+
+    private void RebuildVisibleMessages()
+    {
+        string q = NormalizeForSearch(MessageSearchQuery);
+        VisibleMessages.Clear();
+        IEnumerable<ChatMessageDisplayItem> filtered = string.IsNullOrEmpty(q)
+            ? Messages
+            : Messages.Where(m =>
+                NormalizeForSearch(m.Content).Contains(q, StringComparison.Ordinal) ||
+                NormalizeForSearch(m.SenderFullName).Contains(q, StringComparison.Ordinal) ||
+                NormalizeForSearch(m.AttachmentFileName).Contains(q, StringComparison.Ordinal));
+
+        foreach (ChatMessageDisplayItem item in filtered)
+        {
+            VisibleMessages.Add(item);
+        }
+    }
+
+    private static BitmapImage? LoadAvatarFrozen(byte[] bytes)
+    {
+        try
+        {
+            using var ms = new MemoryStream(bytes);
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = 96;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private void UpdatePeerSearchFilter()
     {
@@ -415,6 +572,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         try
         {
             Messages.Clear();
+            VisibleMessages.Clear();
             if (SelectedConversation is null)
             {
                 return;
@@ -425,12 +583,13 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
             {
                 ChatMessageDisplayItem item = BuildDisplayItem(m);
                 Messages.Add(item);
-                if (item.IsSticker && item.NeedsReverseDownload)
+                if ((item.IsSticker || item.IsImageAttachment) && item.NeedsReverseDownload)
                 {
                     _ = EnsureStickerImageDownloadedAsync(item);
                 }
             }
 
+            RebuildVisibleMessages();
             ScrollToBottomRequested?.Invoke(this, EventArgs.Empty);
         }
         finally
@@ -463,13 +622,14 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         {
             ChatMessageDisplayItem item = BuildDisplayItem(m);
             Messages.Add(item);
-            if (item.IsSticker && item.NeedsReverseDownload)
+            if ((item.IsSticker || item.IsImageAttachment) && item.NeedsReverseDownload)
             {
                 _ = EnsureStickerImageDownloadedAsync(item);
             }
         }
 
         SelectedConversation.UnreadCount = 0;
+        RebuildVisibleMessages();
         ScrollToBottomRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -520,7 +680,10 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
     {
         bool isOwn = string.Equals(m.SenderMachineId, _paths.MachineId, StringComparison.OrdinalIgnoreCase);
         bool isSticker = string.Equals(m.MessageType, "Sticker", StringComparison.OrdinalIgnoreCase);
-        BitmapImage? stickerImg = isSticker ? LoadLocalVaultStickerImage(m.AttachmentVaultPath) : null;
+        BitmapImage? stickerImg = isSticker ? LoadLocalVaultStickerImage(m.AttachmentVaultPath, 160) : null;
+        BitmapImage? inlineImg = !isSticker && ChatMessageDisplayItem.IsImageFileName(m.AttachmentFileName)
+            ? LoadLocalVaultStickerImage(m.AttachmentVaultPath, 420)
+            : null;
 
         return new ChatMessageDisplayItem
         {
@@ -535,7 +698,10 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
             IsOwnMessage = isOwn,
             AttachmentFileName = m.AttachmentFileName,
             AttachmentVaultPath = m.AttachmentVaultPath,
-            StickerImage = stickerImg
+            StickerImage = stickerImg,
+            InlineImage = inlineImg,
+            ReplyToMessageId = m.ReplyToMessageId,
+            ReplyPreviewText = m.ReplyPreviewText
         };
     }
 
@@ -554,7 +720,14 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
             if (updated is not null && !string.IsNullOrWhiteSpace(updated.AttachmentVaultPath))
             {
                 item.AttachmentVaultPath = updated.AttachmentVaultPath;
-                item.StickerImage = LoadLocalVaultStickerImage(updated.AttachmentVaultPath);
+                if (item.IsSticker)
+                {
+                    item.StickerImage = LoadLocalVaultStickerImage(updated.AttachmentVaultPath, 160);
+                }
+                else if (item.IsImageAttachment)
+                {
+                    item.InlineImage = LoadLocalVaultStickerImage(updated.AttachmentVaultPath, 420);
+                }
             }
         }
         catch
@@ -562,7 +735,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         }
     }
 
-    private BitmapImage? LoadLocalVaultStickerImage(string? vaultRelPath)
+    private BitmapImage? LoadLocalVaultStickerImage(string? vaultRelPath, int decodePixelWidth = 160)
     {
         if (string.IsNullOrWhiteSpace(vaultRelPath))
         {
@@ -572,7 +745,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         string fullPath = Path.GetFullPath(Path.Combine(
             _paths.VaultDirectory,
             vaultRelPath.Replace('/', Path.DirectorySeparatorChar)));
-        return CustomStickerService.LoadBitmapFrozen(fullPath, 160);
+        return CustomStickerService.LoadBitmapFrozen(fullPath, decodePixelWidth);
     }
 
     public void LoadStickers()
@@ -615,7 +788,67 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
     private void RequestOpenCreateGroupWindow() => OpenCreateGroupWindowRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
+    private void RequestOpenManageGroupWindow()
+    {
+        if (SelectedConversation is null || !SelectedConversation.IsGroupConversation)
+        {
+            StatusBanner = "Chỉ có thể đổi tên / sửa thành viên đối với nhóm chat.";
+            return;
+        }
+
+        OpenManageGroupWindowRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
     private void ToggleDetachChatWindow() => ToggleDetachRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void ClearMessageSearch() => MessageSearchQuery = string.Empty;
+
+    [RelayCommand]
+    private void StartReply(ChatMessageDisplayItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        ReplyingToMessage = item;
+    }
+
+    [RelayCommand]
+    private void CancelReply() => ReplyingToMessage = null;
+
+    [RelayCommand]
+    private void PreviewImageMessage(ChatMessageDisplayItem? item)
+    {
+        if (item is not null && item.IsImageAttachment)
+        {
+            PreviewImageRequested?.Invoke(this, item);
+        }
+    }
+
+    public async Task UpdateGroupMembersAsync(
+        string newName,
+        IReadOnlyList<(string MachineId, string FullName)> members)
+    {
+        if (SelectedConversation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _chatService.UpdateGroupConversationAsync(SelectedConversation.Id, newName, members);
+            _ = await _collabSync.FlushPendingChatAsync();
+            await RefreshAllAsync();
+            StatusBanner = $"Đã cập nhật nhóm chat '{newName}'.";
+        }
+        catch (Exception ex)
+        {
+            StatusBanner = $"Lỗi cập nhật nhóm: {ex.Message}";
+        }
+    }
 
     public async Task CreateGroupWithMembersAsync(
         string groupName,
@@ -729,16 +962,24 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
 
         string[] targets = ResolveTargetMachineIds(SelectedConversation.Entity);
         string msgType = string.IsNullOrWhiteSpace(DraftAttachmentPath) ? "Text" : "File";
+        Guid? replyId = ReplyingToMessage?.Id;
+        string? replySnippet = ReplyingToMessage is null
+            ? null
+            : $"{ReplyingToMessage.SenderFullName}: {(string.IsNullOrWhiteSpace(ReplyingToMessage.Content) ? ReplyingToMessage.AttachmentFileName : ReplyingToMessage.Content)}";
+
         ChatMessageEntity sent = await _chatService.SendMessageAsync(
             SelectedConversation.Id,
             MessageDraft,
             string.IsNullOrWhiteSpace(DraftAttachmentPath) ? null : DraftAttachmentPath,
             null,
             targets,
-            messageType: msgType);
+            messageType: msgType,
+            replyToMessageId: replyId,
+            replyPreviewText: replySnippet);
 
         MessageDraft = string.Empty;
         DraftAttachmentPath = string.Empty;
+        ReplyingToMessage = null;
 
         int delivered = await _collabSync.FlushPendingChatAsync();
         StatusBanner = delivered > 0
@@ -762,6 +1003,31 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         _ = await _collabSync.FlushPendingChatAsync();
         await RefreshAllAsync();
         StatusBanner = $"Đã ghim công việc '{SelectedTaskToPin.Title}' vào đoạn chat.";
+    }
+
+    [RelayCommand]
+    private async Task UnpinTaskAsync()
+    {
+        if (SelectedConversation is null || string.IsNullOrWhiteSpace(SelectedConversation.PinnedTaskSummary))
+        {
+            StatusBanner = "Đoạn chat này chưa ghim công việc nào.";
+            return;
+        }
+
+        string[] targets = ResolveTargetMachineIds(SelectedConversation.Entity);
+        try
+        {
+            await _chatService.UnpinTaskFromConversationAsync(SelectedConversation.Id, targets);
+        }
+        catch (Exception ex)
+        {
+            StatusBanner = $"Không thể bỏ ghim: {ex.Message}";
+            return;
+        }
+
+        _ = await _collabSync.FlushPendingChatAsync();
+        await RefreshAllAsync();
+        StatusBanner = "Đã bỏ ghim công việc khỏi đoạn chat.";
     }
 
     [RelayCommand]
@@ -829,6 +1095,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
         if (Messages.All(m => m.Id != sent.Id))
         {
             Messages.Add(BuildDisplayItem(sent));
+            RebuildVisibleMessages();
             ScrollToBottomRequested?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -869,6 +1136,7 @@ public sealed partial class ChatWorkspaceViewModel : ObservableObject, IDisposab
     public void Dispose()
     {
         _chatSubscription.Dispose();
+        _avatarSubscription.Dispose();
         _pollLock.Dispose();
     }
 }
